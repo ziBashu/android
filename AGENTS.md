@@ -1,8 +1,18 @@
 # Agent guide — ziBashu ANDROID monorepo
 
+## Read this first
+
+**Canonical multi-APK process (create → harden → commit → push):**
+
+→ **[docs/NEXT_AGENT_STANDARD_WORKFLOW.md](docs/NEXT_AGENT_STANDARD_WORKFLOW.md)**
+
+Emulator / UI verify loop:
+
+→ **[docs/agent-dev-loop.md](docs/agent-dev-loop.md)**
+
 ## What this repo is
 
-Flutter multi-app monorepo for **distinct ziBashu-branded APKs** distributed via warehub.
+Flutter multi-app monorepo for **distinct ziBashu-branded APKs** (games, tool, lab, studio, messaging, …) distributed via **warehub** (and later Play).
 
 Do **not** modify `C:\Users\syxMa\android-ziBashu` (Kotlin Play WebView shell).
 
@@ -11,40 +21,60 @@ Do **not** modify `C:\Users\syxMa\android-ziBashu` (Kotlin Play WebView shell).
 ```powershell
 cd C:\Users\syxMa\ANDROID
 . .\scripts\env.ps1
+flutter devices
 ```
+
+## Create another APK (game / tool / …)
+
+```powershell
+.\scripts\new_app.ps1 -Slug mygame -Name "MyGame" -Kind game -Register
+.\scripts\harden_check.ps1 -App mygame
+cd apps\mygame
+flutter run -d emulator-5554
+cd ..\..
+.\scripts\build_apk.ps1 -App mygame
+```
+
+Registry of all shippable apps: `apps/registry.json`.
 
 ## Layout
 
 - `packages/zibashu_core` — API config, catalog, warehub models
-- `packages/zibashu_ui` — theme + chrome
+- `packages/zibashu_ui` — theme + **from ziBashu** chrome
 - `packages/zibashu_auth` — Sanctum token store / login
 - `apps/zibashu_hub` — family launcher (`com.zibashu.hub`)
 - `apps/seru` — messaging sample (`com.zibashu.seru`)
-
-## Add a new APK
-
-```powershell
-.\scripts\new_app.ps1 -Slug mytool -Name "MyTool" -Surface tool
-```
-
-Then:
-
-1. Implement under `apps/mytool`
-2. Register in `family_catalog.dart`
-3. Add build target in `scripts/build_apk.ps1`
-4. Fill apk-module-contract fields in docs
+- `apps/<slug>` — every new product APK
 
 ## Build
 
 ```powershell
 .\scripts\build_apk.ps1 -App all
-# outputs: dist/<slug>-v<version>.apk + .json
+# → dist/<slug>-v<version>.apk + .json
 ```
+
+## Hardening
+
+```powershell
+.\scripts\harden_check.ps1 -App all
+```
+
+## Commit and push
+
+```powershell
+git status
+git add <sources only — never dist/, signing/, keystores>
+git commit -m "Add <Name> (<kind>) APK for ziBashu family."
+git pull --rebase origin main
+git push origin main
+```
+
+Never force-push `main`. Prefer feature branches + PR for large work.
 
 ## Rules
 
 - Package IDs: `com.zibashu.<slug>` only
-- Every UI should show “from ziBashu”
+- Every UI shows **from ziBashu**
 - No secrets in clients
-- Prefer demo mode for UI work when API is missing
-- Prefer path deps on shared packages over copy-paste
+- Demo mode when API missing
+- Path deps on shared packages — no copy-paste themes/auth

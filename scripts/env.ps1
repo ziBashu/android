@@ -25,12 +25,24 @@ $env:ANDROID_HOME = $AndroidHome
 $env:ANDROID_SDK_ROOT = $AndroidHome
 $env:ZIBASHU_TOOLCHAIN = $ToolchainRoot
 
+# Prefer Studio emulator binary when present (AVDs live under %USERPROFILE%\.android)
+$StudioSdk = Join-Path $env:LOCALAPPDATA "Android\Sdk"
+$StudioEmulator = Join-Path $StudioSdk "emulator"
+$StudioPlatformTools = Join-Path $StudioSdk "platform-tools"
+
 $pathsToPrepend = @(
     (Join-Path $JavaHome "bin"),
     (Join-Path $AndroidHome "platform-tools"),
     (Join-Path $AndroidHome "cmdline-tools\latest\bin"),
     (Join-Path $FlutterHome "bin")
 )
+if (Test-Path (Join-Path $StudioEmulator "emulator.exe")) {
+    $pathsToPrepend += $StudioEmulator
+}
+if (Test-Path $StudioPlatformTools) {
+    # Keep toolchain platform-tools first; Studio path is fallback only if missing above
+}
+
 
 foreach ($p in $pathsToPrepend) {
     if ((Test-Path $p) -and ($env:Path -notlike "*$p*")) {

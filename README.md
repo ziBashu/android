@@ -24,17 +24,39 @@ cd C:\Users\syxMa\ANDROID
 # Every session
 . .\scripts\env.ps1
 
-# Run hub
+# Emulator must be running (Android Studio Device Manager)
+flutter devices
+
+# Run hub on emulator
 cd apps\zibashu_hub
 flutter pub get
-flutter run
+flutter run -d emulator-5554
+
+# Agent UI capture (repo root)
+cd C:\Users\syxMa\ANDROID
+.\scripts\screenshot.ps1 -Out screenshots\latest.png
 
 # Or build release APKs for warehub
-cd C:\Users\syxMa\ANDROID
 .\scripts\build_apk.ps1 -App all
 ```
 
 Artifacts land in `dist/` as `<slug>-v<version>.apk` plus matching JSON metadata.
+
+**Next agent / multi-APK standard (create → harden → commit → push):**  
+[docs/NEXT_AGENT_STANDARD_WORKFLOW.md](docs/NEXT_AGENT_STANDARD_WORKFLOW.md)
+
+AI agent loop (Flutter CLI + adb, not Android Studio APIs): [docs/agent-dev-loop.md](docs/agent-dev-loop.md).
+
+### New product APK (game, tool, …)
+
+```powershell
+. .\scripts\env.ps1
+.\scripts\new_app.ps1 -Slug mytool -Name "MyTool" -Kind tool -Register
+.\scripts\harden_check.ps1 -App mytool
+.\scripts\build_apk.ps1 -App mytool
+```
+
+Registry: `apps/registry.json`.
 
 ## Toolchain
 

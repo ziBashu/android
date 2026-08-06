@@ -44,6 +44,8 @@ dist/
 *.apk
 *.aab
 *.ipa
+screenshots/
+!screenshots/.gitkeep
 
 # Env
 .env

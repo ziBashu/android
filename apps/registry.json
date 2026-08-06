@@ -1,0 +1,45 @@
+{
+  "family": "ziBashu",
+  "website": "https://zibashu4.com",
+  "packagePrefix": "com.zibashu",
+  "kinds": [
+    "hub",
+    "messaging",
+    "tool",
+    "game",
+    "lab",
+    "studio",
+    "social",
+    "other"
+  ],
+  "apps": [
+    {
+      "key": "hub",
+      "slug": "hub",
+      "name": "ziBashu Hub",
+      "dir": "apps/zibashu_hub",
+      "packageId": "com.zibashu.hub",
+      "kind": "hub",
+      "surface": "hub",
+      "route": "/",
+      "blurb": "Directory of ziBashu apps on your device and the web.",
+      "available": true,
+      "accentHex": "0xFF2F6F4E",
+      "distribution": ["warehub", "play"]
+    },
+    {
+      "key": "seru",
+      "slug": "seru",
+      "name": "Seru",
+      "dir": "apps/seru",
+      "packageId": "com.zibashu.seru",
+      "kind": "messaging",
+      "surface": "messaging",
+      "route": "/seru",
+      "blurb": "Private messaging for the ziBashu system.",
+      "available": true,
+      "accentHex": "0xFF3D5A80",
+      "distribution": ["warehub", "play"]
+    }
+  ]
+}
