@@ -1,0 +1,18 @@
+name: zibashu_auth
+description: Sanctum token storage and login helpers for ziBashu apps.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^9.2.4
+  zibashu_core:
+    path: ../zibashu_core
+
+dev_dependencies:
+  flutter_lints: ^5.0.0

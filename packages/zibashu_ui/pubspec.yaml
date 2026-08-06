@@ -1,0 +1,18 @@
+name: zibashu_ui
+description: Brand theme and shared chrome for ziBashu Android apps.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  url_launcher: ^6.3.1
+  zibashu_core:
+    path: ../zibashu_core
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
