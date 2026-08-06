@@ -42,3 +42,14 @@ Requires (gitignored):
 ```powershell
 adb install -r dist\neon_chronos-v3.0.1-warehub.apk
 ```
+
+## Live WareHub (published 2026-08-06)
+
+| Item | Value |
+|------|--------|
+| Listing | https://zibashu4.com/hub/warehub/neon-chronos |
+| Android download | https://zibashu4.com/hub/warehub/neon-chronos/download/android |
+| Mode | **Offline** product (no server game backend) |
+| Server package | `storage/app/public/warehub/packages/zibashu/android-1786024601-fbio06.apk` |
+
+Ship / SSH / backup rules: [AGENT_SERVER_AND_SHIP_WORKFLOW.md](./AGENT_SERVER_AND_SHIP_WORKFLOW.md).

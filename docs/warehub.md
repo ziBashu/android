@@ -1,16 +1,27 @@
 # Warehub packaging
 
-Warehub is the ziBashu site surface where users download family APKs. This monorepo **builds** APKs and metadata; it does not host them.
+WareHub is the ziBashu **public** multi-device download shelf on the production site. This monorepo **builds** APKs/metadata; **hosting** is on the VPS under Laravel `WarehubApp`.
+
+**Full agent procedure (SSH, paths, offline vs online, backup sync):**  
+→ [AGENT_SERVER_AND_SHIP_WORKFLOW.md](./AGENT_SERVER_AND_SHIP_WORKFLOW.md)
+
+| Surface | URL |
+|---------|-----|
+| Storefront | https://zibashu4.com/hub/warehub |
+| Admin publish | https://zibashu4.com/admin/warehub (URL only) |
+| Server files | `/www/wwwroot/ziBashu4.com/storage/app/public/warehub/` |
 
 ## Naming
 
 | Field | Rule |
 |-------|------|
 | applicationId | `com.zibashu.<slug>` |
-| APK file | `<slug>-v<versionName>.apk` |
-| Metadata | `<slug>-v<versionName>.json` |
+| Local APK file | `<slug>-v<versionName>.apk` or `*-warehub.apk` |
+| Local metadata | `<slug>-v<versionName>.json` |
+| Server package file | `warehub/packages/zibashu/android-<unix>-<rand>.apk` |
+| Listing slug | URL-safe (e.g. `neon-chronos`) |
 
-## Metadata schema
+## Metadata schema (local dist JSON)
 
 ```json
 {
@@ -29,16 +40,18 @@ Warehub is the ziBashu site surface where users download family APKs. This monor
 }
 ```
 
-`scripts/build_apk.ps1` writes this next to the APK under `dist/`.
+`scripts/build_apk.ps1` / `build_neon_dual.ps1` write this next to the APK under `dist/`.  
+Production listing fields live in MySQL table `warehub_apps` (see workflow doc).
 
 ## Signing
 
-- Dev/sideload keystore: generate under `signing/` (gitignored).
+- Public warehub stable + Play: upload keystore under `signing/` (gitignored).
 - Do **not** reuse the Play upload keystore from `android-ziBashu` unless you explicitly choose to.
 - Users must enable “install unknown apps” for warehub sideloads.
 
 ## Version bumps
 
 1. Edit `apps/<slug>/pubspec.yaml` → `version: x.y.z+code`
-2. Rebuild with `.\scripts\build_apk.ps1 -App <slug>`
-3. Upload both APK and JSON to warehub
+2. Rebuild with `.\scripts\build_apk.ps1 -App <slug>` or dual-build script
+3. Upload APK (+ icon) to server warehub storage and upsert `warehub_apps`
+4. Smoke https://zibashu4.com/hub/warehub/`<listing-slug>`

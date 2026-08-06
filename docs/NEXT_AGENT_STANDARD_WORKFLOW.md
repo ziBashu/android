@@ -190,7 +190,9 @@ JSON fields (written by `build_apk.ps1`):
 
 `slug`, `name`, `packageId`, `versionName`, `versionCode`, `minSdk`, `family`, `kind`/`surface`, `apk`, `website`, `route`, `blurb`.
 
-Upload both files to warehub when that surface exists. Until then, keep artifacts local or attach to a release.
+Upload the **warehub APK** (and icon) to production WareHub — full SSH/SFTP + DB steps in  
+**[AGENT_SERVER_AND_SHIP_WORKFLOW.md](./AGENT_SERVER_AND_SHIP_WORKFLOW.md)**.  
+Play uses the **AAB** path separately. After server changes, sync **`C:\Users\syxMa\ziBashu`**.
 
 ---
 

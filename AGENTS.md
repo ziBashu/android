@@ -6,6 +6,11 @@
 
 → **[docs/NEXT_AGENT_STANDARD_WORKFLOW.md](docs/NEXT_AGENT_STANDARD_WORKFLOW.md)**
 
+**Server ship, WareHub upload, offline vs online products, local backup mirror:**
+
+→ **[docs/AGENT_SERVER_AND_SHIP_WORKFLOW.md](docs/AGENT_SERVER_AND_SHIP_WORKFLOW.md)**  
+→ Local full-server rebuild mirror: **`C:\Users\syxMa\ziBashu`** (sync after production changes)
+
 Emulator / UI verify loop:
 
 → **[docs/agent-dev-loop.md](docs/agent-dev-loop.md)**
