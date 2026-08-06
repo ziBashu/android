@@ -10,6 +10,11 @@ Emulator / UI verify loop:
 
 → **[docs/agent-dev-loop.md](docs/agent-dev-loop.md)**
 
+Human + agent collab (feedback after each edit):
+
+→ **[docs/DEV_COLLAB_LOOP.md](docs/DEV_COLLAB_LOOP.md)**  
+→ User writes results in **`DEV_FEEDBACK.md`** (local, gitignored; template: `DEV_FEEDBACK.example.md`)
+
 ## What this repo is
 
 Flutter multi-app monorepo for **distinct ziBashu-branded APKs** (games, tool, lab, studio, messaging, …) distributed via **warehub** (and later Play).

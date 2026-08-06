@@ -1,0 +1,28 @@
+name: neon_chronos
+description: Neon Chronos — Temporal OS, a polished futuristic personal time environment.
+publish_to: none
+version: 3.0.1+4
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.3.0
+  uuid: ^4.5.1
+  home_widget: ^0.7.0
+  battery_plus: ^6.0.0
+  zibashu_core:
+    path: ../../packages/zibashu_core
+  zibashu_ui:
+    path: ../../packages/zibashu_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

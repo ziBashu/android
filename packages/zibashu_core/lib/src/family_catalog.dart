@@ -74,4 +74,14 @@ const List<FamilyApp> kFamilyCatalog = [
     available: false,
     accentHex: 0xFF5C6B73,
   ),
+  FamilyApp(
+    slug: 'neon_chronos',
+    name: 'Neon Chronos',
+    packageId: 'com.zibashu.neon_chronos',
+    surface: 'tool',
+    blurb: 'Futuristic neon cyberpunk clock - digital HUD time device.',
+    webRoute: '/hub',
+    available: true,
+    accentHex: 0xFF00E5FF,
+  ),
 ];

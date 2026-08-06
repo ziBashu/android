@@ -46,6 +46,7 @@ dist/
 *.ipa
 screenshots/
 !screenshots/.gitkeep
+DEV_FEEDBACK.md
 
 # Env
 .env

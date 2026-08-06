@@ -1,4 +1,4 @@
-# Scaffold a new ziBashu specialty Flutter APK (game, tool, lab, studio, ...).
+﻿# Scaffold a new ziBashu specialty Flutter APK (game, tool, lab, studio, ...).
 # Usage:
 #   . .\scripts\env.ps1
 #   .\scripts\new_app.ps1 -Slug playforge -Name "PlayForge" -Kind game -Register
@@ -26,7 +26,7 @@ Set-Location $RepoRoot
 $Slug = $Slug.ToLowerInvariant() -replace '[^a-z0-9_]', '_'
 if (-not $PackageId) { $PackageId = "com.zibashu.$Slug" }
 if (-not $Surface) { $Surface = $Kind }
-if (-not $Blurb) { $Blurb = "$Name — a ziBashu $Kind for the family of apps." }
+if (-not $Blurb) { $Blurb = "$Name - a ziBashu $Kind for the family of apps." }
 if (-not $WebRoute) { $WebRoute = "/" }
 
 $appDir = Join-Path $RepoRoot "apps\$Slug"
