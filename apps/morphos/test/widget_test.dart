@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morphos/core/models.dart';
 import 'package:morphos/core/morph_controller.dart';
+import 'package:morphos/core/system_morph_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -64,5 +65,35 @@ void main() {
     await c.completeOnboarding('gaming');
     expect(c.onboardingDone, isTrue);
     expect(c.profileId, MorphProfileId.gaming);
+  });
+
+  test('Phase2+ system orientation modes map from profiles', () {
+    expect(MorphProfileId.gaming.systemOrientationMode, 'landscape');
+    expect(MorphProfileId.reading.systemOrientationMode, 'portrait');
+    expect(MorphProfileId.phone.systemOrientationMode, 'sensor');
+  });
+
+  test('Phase4 desktop shell flag and layout default', () async {
+    final c = MorphController();
+    await c.load();
+    expect(c.desktopModeEnabled, isTrue);
+    await c.applyProfile(MorphProfileId.desktop, reason: 'test');
+    expect(c.showDesktopShell, isTrue);
+    expect(
+      MorphEnvironment.defaultsFor(MorphProfileId.desktop).layoutLandscape,
+      MorphLayoutId.desktop,
+    );
+  });
+
+  test('SystemMorphBridge rules skip demo ids', () {
+    final rules = SystemMorphBridge.rulesFromAppMorph([
+      const AppMorphRule(appId: 'maps', profileId: MorphProfileId.car),
+      const AppMorphRule(
+        appId: 'com.google.android.apps.maps',
+        profileId: MorphProfileId.car,
+      ),
+    ]);
+    expect(rules.containsKey('maps'), isFalse);
+    expect(rules['com.google.android.apps.maps'], 'landscape');
   });
 }

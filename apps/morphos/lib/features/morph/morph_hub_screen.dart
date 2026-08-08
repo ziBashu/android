@@ -63,8 +63,9 @@ class MorphHubScreen extends StatelessWidget {
                   ],
                   const SizedBox(height: 10),
                   Text(
-                    'Phase 2: full environment packs + per-app rules + gestures. '
-                    'System-wide rotation (Rotation APK / Accessibility) remains Phase 2+ native.',
+                    'Packs + per-app rules + gestures. '
+                    'Phase 2+: system orientation via Accessibility when enabled. '
+                    'Phase 4: Desktop Morph uses rail + workspace + floating tasks.',
                     style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
                   ),
                 ],

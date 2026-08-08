@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MorphOS</string>
+    <string name="morph_orientation_service_label">MorphOS System Morph</string>
+    <string name="morph_orientation_service_description">Allows MorphOS to detect the foreground app and apply morph orientation profiles (portrait / landscape) system-wide, like per-app rotation managers. MorphOS does not read passwords or personal content.</string>
+</resources>

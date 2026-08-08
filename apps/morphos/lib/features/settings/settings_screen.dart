@@ -4,6 +4,7 @@ import 'package:zibashu_ui/zibashu_ui.dart';
 
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
+import '../../core/system_morph_bridge.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
 
@@ -125,7 +126,7 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: (v) => c.setGridColumns(v.round()),
               ),
             ]),
-            _section(c, 'Morph Engine · Phase 3 Adaptive', [
+            _section(c, 'Morph Engine · Adaptive', [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title:
@@ -172,6 +173,155 @@ class SettingsScreen extends StatelessWidget {
                     );
                   }
                 },
+              ),
+            ]),
+            _section(c, 'System Morph · Phase 2+', [
+              Text(
+                'Applies morph orientation system-wide (Rotation-style). '
+                'Requires Accessibility + Modify system settings. '
+                'MorphOS only uses foreground package + orientation — no password reading.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('System-wide morph orientation',
+                    style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  _systemMorphSubtitle(c),
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.systemMorphEnabled,
+                onChanged: (v) async {
+                  if (v) {
+                    await c.refreshSystemStatus();
+                    if (!c.systemStatus.accessibilityRunning) {
+                      await SystemMorphBridge.openAccessibilitySettings();
+                    }
+                    if (!c.systemStatus.canWriteSettings) {
+                      await SystemMorphBridge.openWriteSettings();
+                    }
+                  }
+                  await c.setSystemMorphEnabled(v);
+                  await c.refreshSystemStatus();
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.accessibility_new, color: p.accentSecondary),
+                title: Text('Open Accessibility settings',
+                    style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.systemStatus.accessibilityRunning
+                      ? 'Service running'
+                      : 'Enable “MorphOS System Morph”',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () async {
+                  await SystemMorphBridge.openAccessibilitySettings();
+                  await Future<void>.delayed(const Duration(seconds: 1));
+                  await c.refreshSystemStatus();
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.settings_suggest_outlined,
+                    color: p.accentSecondary),
+                title: Text('Allow modify system settings',
+                    style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.systemStatus.canWriteSettings
+                      ? 'WRITE_SETTINGS granted'
+                      : 'Needed to lock rotation',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () async {
+                  await SystemMorphBridge.openWriteSettings();
+                  await Future<void>.delayed(const Duration(seconds: 1));
+                  await c.refreshSystemStatus();
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.refresh, color: p.accentSecondary),
+                title: Text('Refresh system status',
+                    style: TextStyle(color: p.ink)),
+                onTap: () async {
+                  await c.refreshSystemStatus();
+                  await c.syncSystemMorph();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'a11y=${c.systemStatus.accessibilityRunning} '
+                          'write=${c.systemStatus.canWriteSettings} '
+                          'displays=${c.displayInfo.displayCount}',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ]),
+            _section(c, 'Desktop Mode · Phase 4', [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Desktop shell', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.showDesktopShell
+                      ? 'Active now (Desktop Morph or external display)'
+                      : 'Shows when Desktop Morph or external display',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.desktopModeEnabled,
+                onChanged: c.setDesktopModeEnabled,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title:
+                    Text('Floating task windows', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Long-press / Ctrl+tap apps on desktop workspace',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.floatingWindowsEnabled,
+                onChanged: c.setFloatingWindowsEnabled,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.cast_connected, color: p.accentSecondary),
+                title: Text('Displays', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  '${c.displayInfo.displayCount} display(s)'
+                  '${c.displayInfo.hasExternalDisplay ? ' · external connected' : ' · phone only'}'
+                  '${c.pointerConnected ? ' · mouse' : ''}'
+                  '${c.keyboardConnected ? ' · keyboard' : ''}',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () async {
+                  await c.refreshSystemStatus();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          c.displayInfo.hasExternalDisplay
+                              ? 'External display detected'
+                              : 'No external display (HDMI/wireless dock later)',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    Icon(Icons.desktop_windows_outlined, color: p.accentSecondary),
+                title: Text('Enter Desktop Morph', style: TextStyle(color: p.ink)),
+                onTap: () => c.applyProfile(
+                  MorphProfileId.desktop,
+                  reason: 'settings:desktop',
+                ),
               ),
             ]),
             _section(c, 'Data system', [
@@ -226,9 +376,9 @@ class SettingsScreen extends StatelessWidget {
             ]),
             _section(c, 'About', [
               Text(
-                'MorphOS 0.3.0 — Phase 3 Adaptive Environment.\n'
-                'Device apps + launch · time/charge/category morphs.\n'
-                'Reference: Launcher OS + Rotation (system orientation later).\n'
+                'MorphOS 0.4.0 — Phase 2+ System Morph + Phase 4 Desktop.\n'
+                'Accessibility orientation · desktop rail/workspace · floating tasks.\n'
+                'Device apps · time/charge/category · Launcher OS + Rotation refs.\n'
                 'from ziBashu · gestures: ↓ control · ←→ morph · ↑ apps.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 13),
               ),
@@ -238,6 +388,17 @@ class SettingsScreen extends StatelessWidget {
       ),
       ),
     );
+  }
+
+  String _systemMorphSubtitle(MorphController c) {
+    final s = c.systemStatus;
+    if (!s.supported) return 'Android only';
+    final bits = <String>[
+      if (s.accessibilityRunning) 'a11y on' else 'a11y off',
+      if (s.canWriteSettings) 'write ok' else 'need write',
+      'mode ${c.profileId.systemOrientationMode}',
+    ];
+    return bits.join(' · ');
   }
 
   Widget _section(

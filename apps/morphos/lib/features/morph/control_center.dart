@@ -144,6 +144,36 @@ Future<void> showMorphControlCenter(
                           value: c.categoryMorphEnabled,
                           onChanged: c.setCategoryMorphEnabled,
                         ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'System morph (orientation)',
+                            style: TextStyle(color: p.ink),
+                          ),
+                          subtitle: Text(
+                            c.systemStatus.readyForSystemMorph
+                                ? 'Accessibility + write ready'
+                                : 'Needs Accessibility + WRITE_SETTINGS',
+                            style: TextStyle(color: p.muted, fontSize: 12),
+                          ),
+                          value: c.systemMorphEnabled,
+                          onChanged: c.setSystemMorphEnabled,
+                        ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Desktop shell',
+                            style: TextStyle(color: p.ink),
+                          ),
+                          subtitle: Text(
+                            c.showDesktopShell
+                                ? 'Desktop UI active'
+                                : 'When Desktop Morph / external display',
+                            style: TextStyle(color: p.muted, fontSize: 12),
+                          ),
+                          value: c.desktopModeEnabled,
+                          onChanged: c.setDesktopModeEnabled,
+                        ),
                       ],
                     ),
                   ),

@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
@@ -9,6 +11,7 @@ import '../../core/morph_controller.dart';
 import '../../widgets/app_icon_tile.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
+import '../desktop/desktop_shell.dart';
 import '../drawer/app_drawer.dart';
 import '../morph/control_center.dart';
 import '../morph/morph_hub_screen.dart';
@@ -23,7 +26,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   MorphController get c => widget.controller;
   final AppCatalog _catalog = AppCatalog();
   late final AdaptiveEngine _adaptive = AdaptiveEngine(c);
@@ -32,9 +35,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_onKey);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await c.applyOrientation(force: true);
+      await c.refreshSystemStatus();
+      await c.syncSystemMorph();
       await _catalog.refresh();
       await _adaptive.start();
       if (mounted) setState(() => _catalogReady = true);
@@ -43,8 +50,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _adaptive.stop();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      c.refreshSystemStatus();
+      c.syncSystemMorph();
+    }
+  }
+
+  bool _onKey(KeyEvent event) {
+    // Phase 4: keyboard presence for desktop chrome.
+    c.setKeyboardConnected(true);
+    return false;
   }
 
   List<MorphAppItem> get _allApps => _catalog.apps;
@@ -194,40 +217,69 @@ class _HomeScreenState extends State<HomeScreen> {
     final size = MediaQuery.sizeOf(context);
     final layout = c.layoutForSize(size);
 
+    final useDesktop = c.showDesktopShell || layout == MorphLayoutId.desktop;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: MorphBackground(
         wallpaperId: c.wallpaperId,
         palette: p,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragEnd: (d) {
-            final v = d.primaryVelocity ?? 0;
-            if (v > 500) {
-              showMorphControlCenter(context, c);
-            } else if (v < -500) {
-              _openDrawer();
+        child: Listener(
+          onPointerHover: (_) => c.setPointerConnected(true),
+          onPointerDown: (e) {
+            if (e.kind == PointerDeviceKind.mouse ||
+                e.kind == PointerDeviceKind.trackpad) {
+              c.setPointerConnected(true);
             }
           },
-          onHorizontalDragEnd: (d) {
-            final v = d.primaryVelocity ?? 0;
-            if (v < -500) {
-              c.cycleProfile(delta: 1);
-              HapticFeedback.lightImpact();
-            } else if (v > 500) {
-              c.cycleProfile(delta: -1);
-              HapticFeedback.lightImpact();
-            }
-          },
-          child: SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(p, time, layout),
-                if (!_catalogReady)
-                  const LinearProgressIndicator(minHeight: 2),
-                Expanded(child: _buildLayout(layout)),
-                _buildDock(p),
-              ],
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v > 500) {
+                showMorphControlCenter(context, c);
+              } else if (v < -500) {
+                _openDrawer();
+              }
+            },
+            onHorizontalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v < -500) {
+                c.cycleProfile(delta: 1);
+                HapticFeedback.lightImpact();
+              } else if (v > 500) {
+                c.cycleProfile(delta: -1);
+                HapticFeedback.lightImpact();
+              }
+            },
+            child: SafeArea(
+              child: useDesktop
+                  ? Column(
+                      children: [
+                        _buildHeader(p, time, MorphLayoutId.desktop),
+                        if (!_catalogReady)
+                          const LinearProgressIndicator(minHeight: 2),
+                        Expanded(
+                          child: DesktopShell(
+                            controller: c,
+                            apps: _allApps,
+                            dockApps: _dockApps,
+                            onOpenApp: _launchApp,
+                            onRename: _renameApp,
+                            onOpenDrawer: _openDrawer,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildHeader(p, time, layout),
+                        if (!_catalogReady)
+                          const LinearProgressIndicator(minHeight: 2),
+                        Expanded(child: _buildLayout(layout)),
+                        _buildDock(p),
+                      ],
+                    ),
             ),
           ),
         ),
@@ -240,6 +292,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (c.timeBasedMorph) 'Time',
       if (c.chargeMorphEnabled) 'Charge',
       if (c.categoryMorphEnabled) 'Category',
+      if (c.systemMorphEnabled) 'System',
+      if (c.showDesktopShell) 'Desktop',
       if (c.isCharging) '⚡',
     ];
     return Padding(
@@ -380,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Phase 3 Adaptive · swipe ↓ control · ←→ morph · ↑ apps',
+                  'Phase 4 Desktop · system morph · swipe ↓ control · ←→ morph',
                   style: TextStyle(color: c.palette.muted),
                   textAlign: TextAlign.center,
                 ),
@@ -510,6 +564,16 @@ class _HomeScreenState extends State<HomeScreen> {
               onLongPress: () => _renameApp(app),
             );
           },
+        );
+      case MorphLayoutId.desktop:
+        // Desktop shell is rendered by HomeScreen when this layout is active.
+        return DesktopShell(
+          controller: c,
+          apps: _allApps,
+          dockApps: _dockApps,
+          onOpenApp: _launchApp,
+          onRename: _renameApp,
+          onOpenDrawer: _openDrawer,
         );
     }
   }

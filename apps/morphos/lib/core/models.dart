@@ -10,12 +10,13 @@ enum MorphThemeId {
   material,
 }
 
-/// Home layout modes (Phase 1).
+/// Home layout modes (Phase 1 + Phase 4 desktop shell).
 enum MorphLayoutId {
   minimal,
   grid,
   spatial,
   cards,
+  desktop,
 }
 
 /// Orientation / personality profiles (Phase 2 core).
@@ -73,6 +74,7 @@ extension MorphLayoutX on MorphLayoutId {
         MorphLayoutId.grid => 'Grid',
         MorphLayoutId.spatial => 'Spatial',
         MorphLayoutId.cards => 'Cards',
+        MorphLayoutId.desktop => 'Desktop',
       };
 
   IconData get icon => switch (this) {
@@ -80,6 +82,7 @@ extension MorphLayoutX on MorphLayoutId {
         MorphLayoutId.grid => Icons.grid_view_rounded,
         MorphLayoutId.spatial => Icons.bubble_chart_outlined,
         MorphLayoutId.cards => Icons.view_agenda_outlined,
+        MorphLayoutId.desktop => Icons.desktop_windows_outlined,
       };
 }
 
@@ -139,6 +142,18 @@ extension MorphProfileX on MorphProfileId {
         MorphProfileId.desktop =>
           true,
         _ => false,
+      };
+
+  /// Phase 2+ system-wide orientation mode for Settings.System / Accessibility.
+  String get systemOrientationMode => switch (this) {
+        MorphProfileId.phone => 'sensor',
+        MorphProfileId.reading => 'portrait',
+        MorphProfileId.work ||
+        MorphProfileId.gaming ||
+        MorphProfileId.car ||
+        MorphProfileId.desktop =>
+          'landscape',
+        MorphProfileId.relax => 'sensor',
       };
 }
 
@@ -348,8 +363,8 @@ class MorphEnvironment {
           profileId: MorphProfileId.desktop,
           themeId: MorphThemeId.glass,
           wallpaperId: WallpaperId.aurora,
-          layoutPortrait: MorphLayoutId.cards,
-          layoutLandscape: MorphLayoutId.cards,
+          layoutPortrait: MorphLayoutId.desktop,
+          layoutLandscape: MorphLayoutId.desktop,
           iconStyle: IconStyleId.squircle,
           showLabels: true,
           iconScale: 1.0,

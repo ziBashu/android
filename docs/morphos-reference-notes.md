@@ -101,14 +101,15 @@ How real per-app / forced orientation works in the wild:
 
 ## MorphOS progress vs references
 
-| Ref capability | MorphOS 0.2.0 |
+| Ref capability | MorphOS 0.4.0 |
 |----------------|---------------|
 | HOME launcher candidate | Yes (`MAIN`+`HOME`+`DEFAULT`) |
-| Dock + workspace layouts | Yes (grid / minimal / spatial / cards) |
+| Dock + workspace layouts | Yes (grid / minimal / spatial / cards / **desktop**) |
 | Theme / wallpaper packs | Yes (5 themes · 7 wallpapers) |
 | Control center | Yes (swipe down Morph Control) |
-| Per-app behavior | Yes (in-app morph rules; not Accessibility yet) |
-| System-wide orientation | **Not yet** — follow Rotation service later |
+| Per-app behavior | Yes (in-app morph rules + package rules to native) |
+| System-wide orientation | **Yes** — `MorphOrientationService` + WRITE_SETTINGS (consent) |
+| Desktop mode | **Yes** — rail/workspace/floating tasks + external display detect |
 
 ---
 
@@ -132,7 +133,7 @@ SET_WALLPAPER_HINTS
 RECEIVE_BOOT_COMPLETED
 ```
 
-Phase 2 later: accessibility service config + `SYSTEM_ALERT_WINDOW` + settings write (only with in-app permission flow).
+Phase 2+ (0.4.0): accessibility service + WRITE_SETTINGS with in-app consent; optional overlay permission reserved.
 
 ---
 

@@ -11,35 +11,40 @@
 | Auth | none |
 | Guest behavior | full offline + optional device app list |
 | Backend routes | none |
-| Local storage | SharedPreferences `morphos_state_v2` |
-| Permissions | INTERNET, VIBRATE, RECEIVE_BOOT_COMPLETED, QUERY_ALL_PACKAGES, SET_WALLPAPER, SET_WALLPAPER_HINTS |
+| Local storage | SharedPreferences `morphos_state_v2` + native `morphos_system_v1` |
+| Permissions | INTERNET, VIBRATE, RECEIVE_BOOT_COMPLETED, QUERY_ALL_PACKAGES, SET_WALLPAPER, SET_WALLPAPER_HINTS, WRITE_SETTINGS, SYSTEM_ALERT_WINDOW, Accessibility service |
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
-| Blurb | Transformable phone interface — adaptive launcher and morph profiles. |
-| Version | **`0.3.0+3`** |
+| Blurb | Transformable phone interface — adaptive launcher, system morph, desktop mode. |
+| Version | **`0.4.0+4`** |
 
 ## Product line
 
 **Appearance → Behavior → Intelligence → Environment → Ecosystem → Platform**
 
-| Phase | Status in 0.3.0 |
+| Phase | Status in 0.4.0 |
 |-------|-----------------|
 | 0 Foundation | Done |
-| 1 Identity | Done + hardened |
+| 1 Identity | Done |
 | 2 Morph Engine (packs, rules, gestures) | Done (in-app) |
-| **3 Adaptive Environment** | **Done (time / charge / category + device apps)** |
-| 2+/3+ system-wide orientation (Accessibility) | Roadmap |
-| 4 Desktop external display | Roadmap |
+| **2+ System Morph (Accessibility orientation)** | **Done (consent + service + WRITE_SETTINGS)** |
+| 3 Adaptive Environment | Done (time / charge / category + device apps) |
+| **4 Desktop Mode** | **Done (shell, floating tasks, display detect, pointer/keyboard)** |
 | 5–6 Ecosystem / ROM | Roadmap |
 
-## Phase 3 behavior
+## Phase 2+ behavior
 
-- **Device app catalog** via `installed_apps` (fallback to demo grid)
-- **Launch** real packages from home/drawer
-- **Category adaptive morph** (game/nav/work/media/read heuristics)
-- **Charge → Desktop Morph** (`battery_plus`), restore previous morph on unplug
-- **Time-based morph** (optional, 5‑min tick)
-- Explicit per-app rules still override category
+- **MorphOrientationService** AccessibilityService (foreground package)
+- **WRITE_SETTINGS** locks system rotation per morph profile / per-app package rules
+- Consent path in Settings → enable Accessibility + modify system settings
+- Flutter `SystemMorphBridge` channel `com.zibashu.morphos/system`
+
+## Phase 4 behavior
+
+- **Desktop layout** rail + workspace + taskbar when Desktop Morph (or external display)
+- **Floating task windows** (long-press / Ctrl+tap)
+- **DisplayManager** external display detection
+- Mouse hover + keyboard presence chrome
 
 ## References
 

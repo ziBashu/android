@@ -6,8 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 import 'morph_palette.dart';
+import 'system_morph_bridge.dart';
 
-/// Central MorphOS state — Phase 0 data + Phase 1 identity + Phase 2 Morph Engine.
+/// Central MorphOS state — Phase 0–4 Morph Engine + system morph + desktop.
 class MorphController extends ChangeNotifier {
   MorphController();
 
@@ -71,9 +72,28 @@ class MorphController extends ChangeNotifier {
   /// Phase 3: use category heuristics for real packages without explicit rules.
   bool categoryMorphEnabled = true;
 
+  /// Phase 2+: push orientation system-wide via Accessibility + WRITE_SETTINGS.
+  bool systemMorphEnabled = false;
+
+  /// Phase 4: force desktop shell when profile is Desktop or external display.
+  bool desktopModeEnabled = true;
+
+  /// Phase 4: floating task panels on desktop workspace.
+  bool floatingWindowsEnabled = true;
+
   /// Phase 3 runtime flags (not all persisted).
   bool isCharging = false;
   MorphProfileId? profileBeforeCharge;
+
+  /// Phase 2+/4 runtime status from native (not fully persisted).
+  SystemMorphStatus systemStatus = SystemMorphStatus.unsupported;
+  DisplayInfo displayInfo = const DisplayInfo(
+    displayCount: 1,
+    hasExternalDisplay: false,
+    displays: [],
+  );
+  bool pointerConnected = false;
+  bool keyboardConnected = false;
 
   /// Phase 2: last transition label for UI.
   String? lastMorphReason;
@@ -133,6 +153,9 @@ class MorphController extends ChangeNotifier {
         perAppMorphEnabled = m['perAppMorphEnabled'] as bool? ?? true;
         chargeMorphEnabled = m['chargeMorphEnabled'] as bool? ?? true;
         categoryMorphEnabled = m['categoryMorphEnabled'] as bool? ?? true;
+        systemMorphEnabled = m['systemMorphEnabled'] as bool? ?? false;
+        desktopModeEnabled = m['desktopModeEnabled'] as bool? ?? true;
+        floatingWindowsEnabled = m['floatingWindowsEnabled'] as bool? ?? true;
 
         final envMap = m['environments'] as Map?;
         if (envMap != null) {
@@ -162,6 +185,8 @@ class MorphController extends ChangeNotifier {
     ready = true;
     // Orientation applied after first home frame (avoids width=0 relaunch).
     await applyOrientation(force: false);
+    await refreshSystemStatus();
+    await syncSystemMorph();
     notifyListeners();
   }
 
@@ -190,11 +215,22 @@ class MorphController extends ChangeNotifier {
         'perAppMorphEnabled': perAppMorphEnabled,
         'chargeMorphEnabled': chargeMorphEnabled,
         'categoryMorphEnabled': categoryMorphEnabled,
+        'systemMorphEnabled': systemMorphEnabled,
+        'desktopModeEnabled': desktopModeEnabled,
+        'floatingWindowsEnabled': floatingWindowsEnabled,
         'environments': {
           for (final e in environments.entries) e.key.name: e.value.toJson(),
         },
         'appRules': appRules.map((r) => r.toJson()).toList(),
       };
+
+  /// Desktop shell when Desktop Morph active, or external display + toggle.
+  bool get showDesktopShell {
+    if (!desktopModeEnabled) return false;
+    if (profileId == MorphProfileId.desktop) return true;
+    if (displayInfo.hasExternalDisplay) return true;
+    return false;
+  }
 
   Future<void> completeOnboarding(String focus) async {
     setupFocus = focus;
@@ -244,6 +280,7 @@ class MorphController extends ChangeNotifier {
     lastMorphReason = reason;
     morphGeneration++;
     await applyOrientation(force: onboardingDone);
+    await syncSystemMorph();
     if (persist) await _persist();
     notifyListeners();
   }
@@ -314,6 +351,67 @@ class MorphController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setSystemMorphEnabled(bool v) async {
+    systemMorphEnabled = v;
+    systemStatus = await SystemMorphBridge.setSystemMorphEnabled(v);
+    await syncSystemMorph();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setDesktopModeEnabled(bool v) async {
+    desktopModeEnabled = v;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setFloatingWindowsEnabled(bool v) async {
+    floatingWindowsEnabled = v;
+    await _persist();
+    notifyListeners();
+  }
+
+  void setPointerConnected(bool v) {
+    if (pointerConnected == v) return;
+    pointerConnected = v;
+    notifyListeners();
+  }
+
+  void setKeyboardConnected(bool v) {
+    if (keyboardConnected == v) return;
+    keyboardConnected = v;
+    notifyListeners();
+  }
+
+  Future<void> refreshSystemStatus() async {
+    systemStatus = await SystemMorphBridge.getStatus();
+    displayInfo = await SystemMorphBridge.getDisplayInfo();
+    // Prefer status fields when bridge bundles them.
+    if (systemStatus.displayCount > 0) {
+      displayInfo = DisplayInfo(
+        displayCount: systemStatus.displayCount,
+        hasExternalDisplay: systemStatus.hasExternalDisplay,
+        displays: displayInfo.displays,
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Push active profile orientation + per-app rules to native layer.
+  Future<void> syncSystemMorph() async {
+    if (!SystemMorphBridge.isAndroid) return;
+    try {
+      if (systemMorphEnabled) {
+        await SystemMorphBridge.setGlobalOrientation(
+          profileId.systemOrientationMode,
+        );
+        await SystemMorphBridge.syncPackageRules(
+          SystemMorphBridge.rulesFromAppMorph(appRules),
+        );
+      }
+    } catch (_) {}
+  }
+
   void notifyAdaptiveOnly() => notifyListeners();
 
   Future<void> setAppRule(AppMorphRule rule) async {
@@ -321,12 +419,14 @@ class MorphController extends ChangeNotifier {
       ...appRules.where((r) => r.appId != rule.appId),
       rule,
     ];
+    await syncSystemMorph();
     await _persist();
     notifyListeners();
   }
 
   Future<void> removeAppRule(String appId) async {
     appRules = appRules.where((r) => r.appId != appId).toList();
+    await syncSystemMorph();
     await _persist();
     notifyListeners();
   }
@@ -493,10 +593,15 @@ class MorphController extends ChangeNotifier {
     perAppMorphEnabled = true;
     chargeMorphEnabled = true;
     categoryMorphEnabled = true;
+    systemMorphEnabled = false;
+    desktopModeEnabled = true;
+    floatingWindowsEnabled = true;
     isCharging = false;
     profileBeforeCharge = null;
     lastMorphReason = null;
     morphGeneration = 0;
+    pointerConnected = false;
+    keyboardConnected = false;
     final env = MorphEnvironment.defaultsFor(MorphProfileId.phone);
     themeId = env.themeId;
     layoutId = env.layoutPortrait;
