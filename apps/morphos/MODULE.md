@@ -78,8 +78,9 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 - [x] Custom MorphOS launcher icon (ziBashu forest/cream + brand mark)
 - [x] Demo/offline when device APIs fail
 - [x] analyze / unit tests / harden_check
-- [ ] Warehub upload when requested
-- [ ] Play upload keystore (still debug-signed for sideload)
+- [x] Warehub upload **v0.7.1** — https://zibashu4.com/hub/warehub/morphos
+- [x] Dual signed release (upload keystore): warehub APK + Play AAB in `dist/`
+- [ ] Play Console upload (AAB ready; Internal track when requested)
 
 ## References
 
