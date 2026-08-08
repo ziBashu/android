@@ -53,6 +53,30 @@ class SystemMorphBridge {
     } catch (_) {}
   }
 
+  /// Apply orientation now; returns whether Settings.System write succeeded.
+  static Future<bool> applyGlobalOrientationNow(String mode) async {
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'applyGlobalOrientationNow',
+        {'mode': mode},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Pulse landscape then leave it (user can reset via morph) — verifies WRITE_SETTINGS.
+  static Future<String?> testRotationPulse() async {
+    if (!isAndroid) return null;
+    try {
+      return await _channel.invokeMethod<String>('testRotationPulse');
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<String?> cycleOrientationMode() async {
     if (!isAndroid) return null;
     try {
@@ -172,8 +196,10 @@ class SystemMorphStatus {
     required this.canWriteSettings,
     required this.canDrawOverlays,
     required this.globalOrientation,
+    this.accessibilityEnabled = false,
     this.lastForegroundPackage,
     this.lastAppliedMode,
+    this.lastApplyOk = false,
     this.displayCount = 1,
     this.hasExternalDisplay = false,
     this.isDefaultHome = false,
@@ -185,12 +211,16 @@ class SystemMorphStatus {
   });
 
   final bool systemMorphEnabled;
+  /// Service process connected (instance live).
   final bool accessibilityRunning;
+  /// Toggle enabled in system Accessibility settings (even if not connected yet).
+  final bool accessibilityEnabled;
   final bool canWriteSettings;
   final bool canDrawOverlays;
   final String globalOrientation;
   final String? lastForegroundPackage;
   final String? lastAppliedMode;
+  final bool lastApplyOk;
   final int displayCount;
   final bool hasExternalDisplay;
   final bool isDefaultHome;
@@ -209,8 +239,10 @@ class SystemMorphStatus {
     supported: false,
   );
 
+  bool get a11yOk => accessibilityRunning || accessibilityEnabled;
+
   bool get readyForSystemMorph =>
-      supported && accessibilityRunning && canWriteSettings;
+      supported && a11yOk && canWriteSettings;
 
   /// Phase 6 readiness score 0–5.
   int get platformScore {
@@ -224,14 +256,22 @@ class SystemMorphStatus {
   }
 
   factory SystemMorphStatus.fromMap(Map<String, dynamic> m) {
+    final lastFg = m['lastForegroundPackage'];
+    final lastMode = m['lastAppliedMode'];
     return SystemMorphStatus(
       systemMorphEnabled: m['systemMorphEnabled'] as bool? ?? false,
       accessibilityRunning: m['accessibilityRunning'] as bool? ?? false,
+      accessibilityEnabled: m['accessibilityEnabled'] as bool? ?? false,
       canWriteSettings: m['canWriteSettings'] as bool? ?? false,
       canDrawOverlays: m['canDrawOverlays'] as bool? ?? false,
       globalOrientation: m['globalOrientation'] as String? ?? 'sensor',
-      lastForegroundPackage: m['lastForegroundPackage'] as String?,
-      lastAppliedMode: m['lastAppliedMode'] as String?,
+      lastForegroundPackage: lastFg == null || '$lastFg'.isEmpty
+          ? null
+          : '$lastFg',
+      lastAppliedMode: lastMode == null || '$lastMode'.isEmpty
+          ? null
+          : '$lastMode',
+      lastApplyOk: m['lastApplyOk'] as bool? ?? false,
       displayCount: m['displayCount'] as int? ?? 1,
       hasExternalDisplay: m['hasExternalDisplay'] as bool? ?? false,
       isDefaultHome: m['isDefaultHome'] as bool? ?? false,

@@ -1,8 +1,11 @@
 package com.zibashu.morphos
 
 import android.accessibilityservice.AccessibilityService
-import android.view.accessibility.AccessibilityEvent
+import android.content.ComponentName
+import android.content.Context
+import android.provider.Settings
 import android.util.Log
+import android.view.accessibility.AccessibilityEvent
 
 /**
  * Phase 2+ system morph orientation.
@@ -38,7 +41,8 @@ class MorphOrientationService : AccessibilityService() {
 
         MorphOrientationStore.setLastForeground(this, pkg)
         val mode = MorphOrientationApplier.resolveModeForPackage(this, pkg)
-        MorphOrientationApplier.apply(this, mode)
+        val ok = MorphOrientationApplier.apply(this, mode)
+        Log.d(TAG, "fg=$pkg mode=$mode applied=$ok")
     }
 
     override fun onInterrupt() {
@@ -58,7 +62,33 @@ class MorphOrientationService : AccessibilityService() {
 
         fun isRunning(): Boolean = instance != null
 
-        fun reapply(context: android.content.Context) {
+        /** True when user enabled MorphOS in system Accessibility settings. */
+        fun isEnabledInSettings(context: Context): Boolean {
+            return try {
+                val expected = ComponentName(
+                    context,
+                    MorphOrientationService::class.java,
+                ).flattenToString()
+                val enabled = Settings.Secure.getString(
+                    context.contentResolver,
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                ) ?: return false
+                enabled.split(':').any { entry ->
+                    entry.equals(expected, ignoreCase = true) ||
+                        (
+                            entry.contains(context.packageName, ignoreCase = true) &&
+                                entry.contains(
+                                    "MorphOrientationService",
+                                    ignoreCase = true,
+                                )
+                            )
+                }
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        fun reapply(context: Context) {
             if (!MorphOrientationStore.isEnabled(context)) return
             val pkg = MorphOrientationStore.lastForeground(context)
             val mode = MorphOrientationApplier.resolveModeForPackage(context, pkg)

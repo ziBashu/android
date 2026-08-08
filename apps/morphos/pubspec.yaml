@@ -1,7 +1,7 @@
 name: morphos
-description: MorphOS — transformable phone interface; adaptive launcher and morph profiles.
+description: MorphOS — personal adaptive environment layer; shapes, spaces, intelligence, morph packs.
 publish_to: none
-version: 0.6.1+8
+version: 0.7.1+10
 
 environment:
   sdk: ^3.5.0
@@ -25,3 +25,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/brand/morphos_launcher_1024.png

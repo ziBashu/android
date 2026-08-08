@@ -21,8 +21,8 @@ void main() {
     expect(c.wallpaperId, WallpaperId.cyberpunk);
     expect(c.quietMode, isTrue);
     final morph = await c.morphForAppLaunch('maps');
-    expect(morph, MorphProfileId.car);
-    expect(c.profileId, MorphProfileId.car);
+    expect(morph, MorphProfileId.travel);
+    expect(c.profileId, MorphProfileId.travel);
   });
 
   test('Phase3 category adaptive morph', () async {
@@ -43,12 +43,26 @@ void main() {
 
   test('inferAppCategory heuristics', () {
     expect(
-      inferAppCategory(name: 'Maps', packageName: 'com.google.android.apps.maps'),
+      inferAppCategory(
+        name: 'Maps',
+        packageName: 'com.google.android.apps.maps',
+      ),
       'nav',
     );
     expect(
       inferAppCategory(name: 'Kindle', packageName: 'com.amazon.kindle'),
       'read',
+    );
+    expect(
+      inferAppCategory(name: 'AnkiDroid', packageName: 'com.ichi2.anki'),
+      'study',
+    );
+    expect(
+      inferAppCategory(
+        name: 'Google Translate',
+        packageName: 'com.google.android.apps.translate',
+      ),
+      'travel',
     );
   });
 
@@ -57,7 +71,55 @@ void main() {
       final e = MorphEnvironment.defaultsFor(p);
       expect(e.profileId, p);
       expect(e.dockIds, isNotEmpty);
+      expect(p.shape.label, isNotEmpty);
     }
+  });
+
+  test('Vision: Study and Travel spaces exist', () async {
+    final c = MorphController();
+    await c.load();
+    await c.applyProfile(MorphProfileId.study, reason: 'test');
+    expect(c.profileId.shape, DeviceShape.studySpace);
+    expect(c.quietMode, isTrue);
+    await c.applyProfile(MorphProfileId.travel, reason: 'test');
+    expect(c.profileId.shape, DeviceShape.travelSpace);
+    expect(c.largeTargets, isTrue);
+  });
+
+  test('Intelligence Ask mode queues suggestion', () async {
+    final c = MorphController();
+    await c.load();
+    await c.setIntelligenceMode(IntelligenceMode.ask);
+    final applied = await c.morphForAppLaunch('store');
+    expect(applied, isNull);
+    expect(c.pendingSuggestion, isNotNull);
+    expect(c.pendingSuggestion!.profileId, MorphProfileId.gaming);
+    await c.acceptPendingSuggestion();
+    expect(c.profileId, MorphProfileId.gaming);
+    expect(c.pendingSuggestion, isNull);
+  });
+
+  test('Intelligence Advanced uses context category rules', () async {
+    final c = MorphController();
+    await c.load();
+    await c.setIntelligenceMode(IntelligenceMode.advanced);
+    await c.removeAppRule('store');
+    const app = MorphAppItem(
+      id: 'com.example.game',
+      label: 'Some Game',
+      icon: Icons.sports_esports,
+      packageName: 'com.example.game',
+      category: 'game',
+      isSystemDemo: false,
+    );
+    final morph = await c.morphForAppLaunch(app.id, app: app);
+    expect(morph, MorphProfileId.gaming);
+  });
+
+  test('Pocket Morph is default phone shape', () {
+    expect(MorphProfileId.phone.label, 'Pocket Morph');
+    expect(MorphProfileId.phone.shape, DeviceShape.pocket);
+    expect(MorphProfileId.desktop.askPrompt, contains('desktop'));
   });
 
   test('Onboarding completes and seeds profile', () async {
@@ -72,6 +134,8 @@ void main() {
     expect(MorphProfileId.gaming.systemOrientationMode, 'landscape');
     expect(MorphProfileId.reading.systemOrientationMode, 'portrait');
     expect(MorphProfileId.phone.systemOrientationMode, 'sensor');
+    expect(MorphProfileId.travel.systemOrientationMode, 'landscape');
+    expect(MorphProfileId.study.systemOrientationMode, 'sensor');
   });
 
   test('Phase4 desktop shell flag and layout default', () async {
@@ -159,5 +223,47 @@ void main() {
     expect(c.platformModeEnabled, isTrue);
     expect(c.immersiveChrome, isTrue);
     expect(c.systemStatus.platformScore, inInclusiveRange(0, 5));
+  });
+
+  test('Phone connection: rename + icon override persist in state', () async {
+    final c = MorphController();
+    await c.load();
+    await c.renameApp('maps', 'Nav');
+    expect(c.labelFor(const MorphAppItem(
+      id: 'maps',
+      label: 'Maps',
+      icon: Icons.map,
+    )), 'Nav');
+    await c.setAppIconOverride('maps', [1, 2, 3, 4]);
+    expect(c.iconOverridesB64.containsKey('maps'), isTrue);
+    final decorated = c.displayApp(const MorphAppItem(
+      id: 'maps',
+      label: 'Maps',
+      icon: Icons.map,
+    ));
+    expect(decorated.label, 'Nav');
+    expect(decorated.iconBytes, isNotNull);
+    await c.clearAppIconOverride('maps');
+    expect(c.iconOverridesB64.containsKey('maps'), isFalse);
+  });
+
+  test('SystemMorphStatus readyForSystemMorph needs a11y + write', () {
+    const notReady = SystemMorphStatus(
+      systemMorphEnabled: true,
+      accessibilityRunning: false,
+      canWriteSettings: true,
+      canDrawOverlays: false,
+      globalOrientation: 'landscape',
+    );
+    expect(notReady.readyForSystemMorph, isFalse);
+    const ready = SystemMorphStatus(
+      systemMorphEnabled: true,
+      accessibilityRunning: true,
+      accessibilityEnabled: true,
+      canWriteSettings: true,
+      canDrawOverlays: false,
+      globalOrientation: 'landscape',
+    );
+    expect(ready.readyForSystemMorph, isTrue);
   });
 }

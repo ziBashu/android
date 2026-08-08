@@ -42,7 +42,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const FromZiBashuBadge(compact: true, openWebsite: false),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset(
+                  'assets/brand/morphos_launcher_1024.png',
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.smartphone,
+                    size: 56,
+                    color: p.accentSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Text(
                 'Welcome to MorphOS',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -52,12 +67,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'A phone should not have one shape.\nIt becomes what you need right now.',
+                'A personal adaptive environment.\n'
+                'Android gives apps — MorphOS gives environments.\n'
+                'Your phone is not always a phone.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 15),
               ),
               const SizedBox(height: 10),
               Text(
-                'How do you use your phone?',
+                'What should it become first?',
                 style: TextStyle(
                   color: p.ink,
                   fontWeight: FontWeight.w700,

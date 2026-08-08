@@ -11,7 +11,10 @@ import 'morph_palette.dart';
 import 'platform_chrome.dart';
 import 'system_morph_bridge.dart';
 
-/// Central MorphOS state — Phase 0–6 platform layer + morph engine.
+/// Central MorphOS state — personal adaptive environment layer.
+///
+/// Product contract: Android gives apps; MorphOS gives environments.
+/// See docs/morphos-product-vision.md.
 class MorphController extends ChangeNotifier {
   MorphController();
 
@@ -25,6 +28,15 @@ class MorphController extends ChangeNotifier {
   /// Manual / auto profile currently applied.
   MorphProfileId profileId = MorphProfileId.phone;
 
+  /// How MorphOS decides to change environments.
+  IntelligenceMode intelligenceMode = IntelligenceMode.beginner;
+
+  /// Pending Ask-mode proposal (cleared on accept / dismiss).
+  MorphSuggestion? pendingSuggestion;
+
+  /// Advanced IF/THEN context rules.
+  List<MorphContextRule> contextRules = kDefaultContextRules();
+
   /// Live visual state (mirrors active environment; editable in settings).
   MorphThemeId themeId = MorphThemeId.neon;
   MorphLayoutId layoutId = MorphLayoutId.grid;
@@ -36,7 +48,12 @@ class MorphController extends ChangeNotifier {
   bool quietMode = false;
   bool largeTargets = false;
 
+  /// MorphOS-only display names (does not rename apps on the OS).
   Map<String, String> renames = {};
+
+  /// MorphOS-only custom icons (base64 PNG/JPEG). Does not change system icons.
+  Map<String, String> iconOverridesB64 = {};
+
   List<String> dockIds = const [
     'browser',
     'messages',
@@ -127,7 +144,25 @@ class MorphController extends ChangeNotifier {
   MorphEnvironment get activeEnvironment =>
       environments[profileId] ?? MorphEnvironment.defaultsFor(profileId);
 
-  String labelFor(MorphAppItem app) => renames[app.id] ?? app.label;
+  String labelFor(MorphAppItem app) =>
+      renames[app.id] ?? renames[app.packageName ?? ''] ?? app.label;
+
+  /// Display app with MorphOS rename + custom icon (phone connection layer).
+  MorphAppItem displayApp(MorphAppItem app) {
+    final key = app.packageName ?? app.id;
+    final rename = renames[app.id] ?? renames[key];
+    List<int>? overrideBytes;
+    final b64 = iconOverridesB64[app.id] ?? iconOverridesB64[key];
+    if (b64 != null && b64.isNotEmpty) {
+      try {
+        overrideBytes = base64Decode(b64);
+      } catch (_) {}
+    }
+    return app.copyWith(
+      label: rename ?? app.label,
+      iconBytes: overrideBytes ?? app.iconBytes,
+    );
+  }
 
   MorphAppItem? appById(String id) {
     for (final a in kDemoApps) {
@@ -180,6 +215,11 @@ class MorphController extends ChangeNotifier {
           renames = Map<String, String>.from(
             (m['renames'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? {},
           );
+          iconOverridesB64 = Map<String, String>.from(
+            (m['iconOverridesB64'] as Map?)
+                    ?.map((k, v) => MapEntry('$k', '$v')) ??
+                {},
+          );
           dockIds = List<String>.from(m['dockIds'] as List? ?? dockIds);
           homeIds = List<String>.from(m['homeIds'] as List? ?? homeIds);
           timeBasedMorph = m['timeBasedMorph'] as bool? ?? false;
@@ -195,6 +235,11 @@ class MorphController extends ChangeNotifier {
           immersiveChrome = m['immersiveChrome'] as bool? ?? false;
           keepAwakeDesktop = m['keepAwakeDesktop'] as bool? ?? true;
           bootRestoreEnabled = m['bootRestoreEnabled'] as bool? ?? true;
+          intelligenceMode = _enumByName(
+            IntelligenceMode.values,
+            m['intelligenceMode'] as String?,
+            IntelligenceMode.beginner,
+          );
 
           final envMap = m['environments'] as Map?;
           if (envMap != null) {
@@ -223,6 +268,22 @@ class MorphController extends ChangeNotifier {
                   }
                 })
                 .whereType<AppMorphRule>()
+                .toList();
+          }
+
+          final ctxRules = m['contextRules'] as List?;
+          if (ctxRules != null) {
+            contextRules = ctxRules
+                .map((e) {
+                  try {
+                    return MorphContextRule.fromJson(
+                      Map<String, dynamic>.from(e as Map),
+                    );
+                  } catch (_) {
+                    return null;
+                  }
+                })
+                .whereType<MorphContextRule>()
                 .toList();
           }
 
@@ -308,6 +369,7 @@ class MorphController extends ChangeNotifier {
         'quietMode': quietMode,
         'largeTargets': largeTargets,
         'renames': renames,
+        'iconOverridesB64': iconOverridesB64,
         'dockIds': dockIds,
         'homeIds': homeIds,
         'timeBasedMorph': timeBasedMorph,
@@ -322,10 +384,12 @@ class MorphController extends ChangeNotifier {
         'immersiveChrome': immersiveChrome,
         'keepAwakeDesktop': keepAwakeDesktop,
         'bootRestoreEnabled': bootRestoreEnabled,
+        'intelligenceMode': intelligenceMode.name,
         'environments': {
           for (final e in environments.entries) e.key.name: e.value.toJson(),
         },
         'appRules': appRules.map((r) => r.toJson()).toList(),
+        'contextRules': contextRules.map((r) => r.toJson()).toList(),
         'packLibrary': packLibrary.map((p) => p.toJson()).toList(),
       };
 
@@ -483,40 +547,174 @@ class MorphController extends ChangeNotifier {
   Future<void> setProfile(MorphProfileId id) =>
       applyProfile(id, reason: 'manual');
 
-  /// Opening an app may switch morph (Phase 2 rules + Phase 3 category).
-  Future<MorphProfileId?> morphForAppLaunch(
+  /// Propose a morph for an app without applying (Ask mode / UI).
+  MorphSuggestion? suggestMorphForApp(
     String appId, {
     MorphAppItem? app,
-  }) async {
+  }) {
     if (!perAppMorphEnabled) return null;
 
-    // Explicit rules first (id or package).
+    // Explicit per-app rules first.
     for (final r in appRules) {
       if (!r.enabled) continue;
       if (r.appId == appId ||
           (app?.packageName != null && r.appId == app!.packageName)) {
-        if (r.profileId != profileId) {
-          await applyProfile(
-            r.profileId,
-            reason: 'app-rule:${app?.label ?? appId}',
-          );
-        }
-        return r.profileId;
+        if (r.profileId == profileId) return null;
+        return MorphSuggestion(
+          profileId: r.profileId,
+          reason: 'app-rule:${app?.label ?? appId}',
+          prompt: r.profileId.askPrompt,
+          trigger: MorphTriggerKind.appRule,
+          appId: appId,
+        );
       }
     }
 
-    // Category heuristics for real / demo apps.
+    // Advanced: category only via context rules, not silent heuristics.
+    if (intelligenceMode == IntelligenceMode.advanced) {
+      final cat = app?.category ??
+          inferAppCategory(name: app?.label ?? appId, packageName: appId);
+      for (final r in contextRules) {
+        if (!r.enabled) continue;
+        if (r.trigger != MorphTriggerKind.category) continue;
+        if (r.matchValue != cat) continue;
+        if (r.profileId == profileId) return null;
+        return MorphSuggestion(
+          profileId: r.profileId,
+          reason: r.label ?? 'context:category $cat',
+          prompt: r.profileId.askPrompt,
+          trigger: MorphTriggerKind.contextRule,
+          appId: appId,
+        );
+      }
+      return null;
+    }
+
+    // Beginner / Ask: category heuristics.
     if (categoryMorphEnabled) {
       final cat = app?.category ??
           inferAppCategory(name: app?.label ?? appId, packageName: appId);
       final next = profileForCategory(cat);
       if (next != null && next != profileId) {
-        await applyProfile(
-          next,
+        return MorphSuggestion(
+          profileId: next,
           reason: 'adaptive:category $cat → ${next.label}',
+          prompt: next.askPrompt,
+          trigger: MorphTriggerKind.category,
+          appId: appId,
         );
-        return next;
       }
+    }
+    return null;
+  }
+
+  /// Opening an app may switch morph (rules + category + intelligence mode).
+  ///
+  /// In [IntelligenceMode.ask], stores [pendingSuggestion] and does not apply
+  /// until [acceptPendingSuggestion] (UI dialog).
+  Future<MorphProfileId?> morphForAppLaunch(
+    String appId, {
+    MorphAppItem? app,
+  }) async {
+    final suggestion = suggestMorphForApp(appId, app: app);
+    if (suggestion == null) return null;
+
+    if (intelligenceMode == IntelligenceMode.ask) {
+      pendingSuggestion = suggestion;
+      notifyListeners();
+      return null;
+    }
+
+    await applyProfile(
+      suggestion.profileId,
+      reason: suggestion.reason,
+    );
+    return suggestion.profileId;
+  }
+
+  Future<void> acceptPendingSuggestion() async {
+    final s = pendingSuggestion;
+    if (s == null) return;
+    pendingSuggestion = null;
+    await applyProfile(s.profileId, reason: 'ask-accept:${s.reason}');
+  }
+
+  void dismissPendingSuggestion() {
+    if (pendingSuggestion == null) return;
+    pendingSuggestion = null;
+    notifyListeners();
+  }
+
+  Future<void> setIntelligenceMode(IntelligenceMode mode) async {
+    intelligenceMode = mode;
+    if (mode != IntelligenceMode.ask) {
+      pendingSuggestion = null;
+    }
+    // Beginner turns adaptive helpers on; Advanced leaves toggles to user.
+    if (mode == IntelligenceMode.beginner) {
+      perAppMorphEnabled = true;
+      categoryMorphEnabled = true;
+    } else if (mode == IntelligenceMode.advanced) {
+      // Explicit rules only for category path; keep per-app on.
+      categoryMorphEnabled = false;
+      perAppMorphEnabled = true;
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setContextRule(MorphContextRule rule) async {
+    contextRules = [
+      ...contextRules.where((r) => r.id != rule.id),
+      rule,
+    ];
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> removeContextRule(String id) async {
+    contextRules = contextRules.where((r) => r.id != id).toList();
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Evaluate non-app context (keyboard, external display) for Advanced/Beginner.
+  Future<MorphProfileId?> evaluateAccessoryContext({
+    bool? keyboard,
+    bool? externalDisplay,
+  }) async {
+    final kb = keyboard ?? keyboardConnected;
+    final ext = externalDisplay ?? displayInfo.hasExternalDisplay;
+
+    MorphSuggestion? pick(MorphTriggerKind kind) {
+      for (final r in contextRules) {
+        if (!r.enabled || r.trigger != kind) continue;
+        if (r.profileId == profileId) continue;
+        return MorphSuggestion(
+          profileId: r.profileId,
+          reason: r.label ?? 'context:${kind.name}',
+          prompt: r.profileId.askPrompt,
+          trigger: kind,
+        );
+      }
+      return null;
+    }
+
+    MorphSuggestion? suggestion;
+    if (kb) suggestion = pick(MorphTriggerKind.keyboard);
+    suggestion ??= ext ? pick(MorphTriggerKind.externalDisplay) : null;
+    if (suggestion == null) return null;
+
+    if (intelligenceMode == IntelligenceMode.ask) {
+      pendingSuggestion = suggestion;
+      notifyListeners();
+      return null;
+    }
+    // Advanced and beginner both apply accessory context rules when enabled.
+    if (intelligenceMode == IntelligenceMode.advanced ||
+        intelligenceMode == IntelligenceMode.beginner) {
+      await applyProfile(suggestion.profileId, reason: suggestion.reason);
+      return suggestion.profileId;
     }
     return null;
   }
@@ -534,9 +732,13 @@ class MorphController extends ChangeNotifier {
   }
 
   Future<void> setSystemMorphEnabled(bool v) async {
-    systemMorphEnabled = v;
-    systemStatus = await SystemMorphBridge.setSystemMorphEnabled(v);
-    await syncSystemMorph();
+    if (v) {
+      final msg = await ensureSystemMorphReady(openMissing: true);
+      lastMorphReason = msg;
+      return;
+    }
+    systemMorphEnabled = false;
+    systemStatus = await SystemMorphBridge.setSystemMorphEnabled(false);
     await _persist();
     notifyListeners();
   }
@@ -562,6 +764,9 @@ class MorphController extends ChangeNotifier {
   void setKeyboardConnected(bool v) {
     if (keyboardConnected == v) return;
     keyboardConnected = v;
+    if (v) {
+      unawaited(evaluateAccessoryContext(keyboard: true));
+    }
     notifyListeners();
   }
 
@@ -584,7 +789,8 @@ class MorphController extends ChangeNotifier {
     if (!SystemMorphBridge.isAndroid) return;
     try {
       if (systemMorphEnabled) {
-        await SystemMorphBridge.setGlobalOrientation(
+        // Prefer force-apply so reaction is immediate when WRITE_SETTINGS is OK.
+        await SystemMorphBridge.applyGlobalOrientationNow(
           profileId.systemOrientationMode,
         );
         await SystemMorphBridge.syncPackageRules(
@@ -742,6 +948,120 @@ class MorphController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Store a MorphOS-only custom icon (base64). Empty clears override.
+  Future<void> setAppIconOverride(String id, List<int>? bytes) async {
+    if (bytes == null || bytes.isEmpty) {
+      iconOverridesB64.remove(id);
+    } else {
+      // Keep prefs small — refuse huge payloads.
+      if (bytes.length > 200 * 1024) return;
+      iconOverridesB64[id] = base64Encode(bytes);
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> clearAppIconOverride(String id) async {
+    iconOverridesB64.remove(id);
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Guided enable for system-wide rotation (Accessibility + WRITE_SETTINGS).
+  ///
+  /// Opens missing settings screens, then enables morph when both grants exist.
+  /// Returns a short status string for UI snackbars.
+  Future<String> ensureSystemMorphReady({bool openMissing = true}) async {
+    await refreshSystemStatus();
+    var s = systemStatus;
+    if (!s.supported) {
+      return 'System morph is Android-only.';
+    }
+
+    if (!s.canWriteSettings && openMissing) {
+      await SystemMorphBridge.openWriteSettings();
+      // Caller should re-invoke after resume; still continue status.
+      await refreshSystemStatus();
+      s = systemStatus;
+    }
+    if (!s.accessibilityRunning &&
+        !(s.accessibilityEnabled) &&
+        openMissing) {
+      await SystemMorphBridge.openAccessibilitySettings();
+      await refreshSystemStatus();
+      s = systemStatus;
+    }
+
+    if (!s.canWriteSettings) {
+      systemMorphEnabled = true; // user intent remembered
+      await _persist();
+      notifyListeners();
+      return 'Grant “Modify system settings” for MorphOS, then return.';
+    }
+    if (!s.accessibilityRunning && !s.accessibilityEnabled) {
+      systemMorphEnabled = true;
+      await _persist();
+      notifyListeners();
+      return 'Enable “MorphOS System Morph” in Accessibility, then return.';
+    }
+
+    systemStatus = await SystemMorphBridge.setSystemMorphEnabled(true);
+    systemMorphEnabled = true;
+    await applyOrientation(force: true);
+    await syncSystemMorph();
+    await _persist();
+    notifyListeners();
+
+    final applied = await SystemMorphBridge.applyGlobalOrientationNow(
+      profileId.systemOrientationMode,
+    );
+    if (applied) {
+      return 'System morph ON · ${profileId.label} → '
+          '${profileId.systemOrientationMode} (device-wide).';
+    }
+    return 'System morph enabled — waiting for WRITE_SETTINGS apply.';
+  }
+
+  /// Force current profile orientation onto the phone (if permissions ready).
+  Future<bool> triggerSystemOrientationNow() async {
+    await refreshSystemStatus();
+    if (!systemStatus.canWriteSettings) return false;
+    if (!systemMorphEnabled) {
+      systemStatus = await SystemMorphBridge.setSystemMorphEnabled(true);
+      systemMorphEnabled = true;
+    }
+    final ok = await SystemMorphBridge.applyGlobalOrientationNow(
+      profileId.systemOrientationMode,
+    );
+    await syncSystemMorph();
+    await refreshSystemStatus();
+    notifyListeners();
+    return ok;
+  }
+
+  /// Brief landscape pulse so the user can feel system rotation working.
+  Future<String> testSystemRotation() async {
+    await refreshSystemStatus();
+    if (!systemStatus.canWriteSettings) {
+      await SystemMorphBridge.openWriteSettings();
+      return 'Need Modify system settings first.';
+    }
+    if (!systemStatus.accessibilityRunning &&
+        !systemStatus.accessibilityEnabled) {
+      await SystemMorphBridge.openAccessibilitySettings();
+      return 'Enable MorphOS Accessibility service first.';
+    }
+    systemStatus = await SystemMorphBridge.setSystemMorphEnabled(true);
+    systemMorphEnabled = true;
+    final mode = await SystemMorphBridge.testRotationPulse();
+    await refreshSystemStatus();
+    await _persist();
+    notifyListeners();
+    return mode == null
+        ? 'Test failed — check permissions.'
+        : 'Test applied: $mode (device-wide).';
+  }
+
   // ── Phase 5: Morph Store / Creator / community packs ──
 
   /// Install a store or community pack into the local library.
@@ -884,6 +1204,9 @@ class MorphController extends ChangeNotifier {
       environments[p] = MorphEnvironment.defaultsFor(p);
     }
     appRules = kDefaultAppMorphRules();
+    contextRules = kDefaultContextRules();
+    intelligenceMode = IntelligenceMode.beginner;
+    pendingSuggestion = null;
     timeBasedMorph = false;
     perAppMorphEnabled = true;
     chargeMorphEnabled = true;
@@ -916,6 +1239,7 @@ class MorphController extends ChangeNotifier {
     quietMode = env.quietMode;
     largeTargets = env.largeTargets;
     renames = {};
+    iconOverridesB64 = {};
     dockIds = List<String>.from(env.dockIds);
     homeIds = List<String>.from(env.homeIds);
     await applyOrientation();

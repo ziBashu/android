@@ -11,6 +11,7 @@ import '../../core/morph_controller.dart';
 import '../../widgets/app_icon_tile.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
+import '../connection/phone_connection_screen.dart';
 import '../desktop/desktop_shell.dart';
 import '../drawer/app_drawer.dart';
 import '../ecosystem/morph_store_screen.dart';
@@ -89,7 +90,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return false;
   }
 
-  List<MorphAppItem> get _allApps => _catalog.apps;
+  List<MorphAppItem> get _allApps =>
+      _catalog.apps.map(c.displayApp).toList(growable: false);
 
   List<MorphAppItem> get _homeApps {
     if (_catalog.usingDeviceApps) {
@@ -101,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return c.homeIds
         .map(_catalog.byId)
         .whereType<MorphAppItem>()
+        .map(c.displayApp)
         .toList(growable: false);
   }
 
@@ -111,12 +114,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .take(4)
           .toList(growable: true);
       final settings = _catalog.byId('settings');
-      if (settings != null) list.add(settings);
+      if (settings != null) list.add(c.displayApp(settings));
       return list;
     }
     return c.dockIds
         .map(_catalog.byId)
         .whereType<MorphAppItem>()
+        .map(c.displayApp)
         .take(5)
         .toList(growable: false);
   }
@@ -148,18 +152,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final before = c.profileId;
     final applied = await c.morphForAppLaunch(app.id, app: app);
     if (!mounted) return;
+
+    // Ask-first intelligence: propose environment change before/with launch.
+    if (c.intelligenceMode == IntelligenceMode.ask &&
+        c.pendingSuggestion != null) {
+      await _promptPendingMorph();
+    }
+
+    if (!mounted) return;
     HapticFeedback.selectionClick();
 
     final launched = await _catalog.launch(app);
     if (!mounted) return;
 
+    final after = c.profileId;
+    final morphNote = after != before ? ' · ${after.label}' : '';
     final msg = launched
-        ? (applied != null && applied != before
-            ? 'Launch ${c.labelFor(app)} · ${applied.label}'
-            : 'Launch ${c.labelFor(app)}')
+        ? 'Launch ${c.labelFor(app)}$morphNote'
         : (applied != null && applied != before
             ? '${c.labelFor(app)} → ${applied.label}'
-            : 'Open ${c.labelFor(app)} (demo shell)');
+            : 'Open ${c.labelFor(app)} (demo shell)$morphNote');
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -171,38 +183,141 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {});
   }
 
-  Future<void> _renameApp(MorphAppItem app) async {
-    final controller = TextEditingController(text: c.labelFor(app));
-    final name = await showDialog<String>(
+  Future<void> _promptPendingMorph() async {
+    final s = c.pendingSuggestion;
+    if (s == null) return;
+    final p = c.palette;
+    final go = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        final p = c.palette;
-        return AlertDialog(
-          backgroundColor: p.panel,
-          title: Text('Rename app', style: TextStyle(color: p.ink)),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            style: TextStyle(color: p.ink),
-            decoration: InputDecoration(
-              hintText: app.label,
-              hintStyle: TextStyle(color: p.muted),
-            ),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.panel,
+        title: Text(s.prompt, style: TextStyle(color: p.ink)),
+        content: Text(
+          '${s.profileId.label}\n${s.profileId.shape.blurb}\n\n${s.reason}',
+          style: TextStyle(color: p.muted, height: 1.35),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('Save'),
-            ),
-          ],
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(s.profileId.label),
+          ),
+        ],
+      ),
+    );
+    if (go == true) {
+      await c.acceptPendingSuggestion();
+    } else {
+      c.dismissPendingSuggestion();
+    }
+  }
+
+  Future<void> _renameApp(MorphAppItem app) async {
+    // Full edit sheet: rename + load phone icon (MorphOS-only, not OS rename).
+    final raw = _catalog.byId(app.id) ?? app;
+    final nameCtrl = TextEditingController(text: c.labelFor(raw));
+    final p = c.palette;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: p.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Edit app in MorphOS',
+                style: TextStyle(
+                  color: p.ink,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Changes stay in MorphOS (name + icon). Does not modify Android’s app list.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                style: TextStyle(color: p.ink),
+                decoration: InputDecoration(
+                  labelText: 'Display name',
+                  labelStyle: TextStyle(color: p.muted),
+                  hintText: raw.label,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton(
+                    onPressed: () async {
+                      await c.renameApp(raw.id, nameCtrl.text);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Save name'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () async {
+                      final pkg = raw.packageName ?? raw.id;
+                      final bytes = await _catalog.loadDeviceIcon(pkg);
+                      if (bytes != null) {
+                        await c.setAppIconOverride(raw.id, bytes);
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Use phone icon'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await c.clearAppIconOverride(raw.id);
+                      await c.renameApp(raw.id, '');
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Reset'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );
-    if (name != null) await c.renameApp(app.id, name);
+  }
+
+  void _openPhoneConnection() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ListenableBuilder(
+          listenable: c,
+          builder: (_, __) => PhoneConnectionScreen(
+            controller: c,
+            catalog: _catalog,
+          ),
+        ),
+      ),
+    );
   }
 
   void _openSettings() {
@@ -418,6 +533,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             visualDensity: VisualDensity.compact,
             onPressed: _openPlatform,
             icon: Icon(Icons.developer_board, color: p.accentSecondary),
+          ),
+          IconButton(
+            tooltip: 'Phone connection',
+            visualDensity: VisualDensity.compact,
+            onPressed: _openPhoneConnection,
+            icon: Icon(Icons.phonelink_setup, color: p.accentSecondary),
           ),
           IconButton(
             tooltip: 'Settings',

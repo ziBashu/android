@@ -90,7 +90,7 @@ const List<FamilyApp> kFamilyCatalog = [
     packageId: 'com.zibashu.morphos',
     surface: 'other',
     blurb:
-        'Transformable phone environment — morph packs, desktop, platform layer.',
+        'Personal adaptive environment — shapes, spaces, intelligence, morph packs.',
     webRoute: '/hub',
     available: true,
     accentHex: 0xFF7C4DFF,

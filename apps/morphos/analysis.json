@@ -1,0 +1,1 @@
+[info] The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'. Try removing the import directive (C:\Users\syxMa\ANDROID\apps\morphos\lib\core\app_catalog.dart:2:8)

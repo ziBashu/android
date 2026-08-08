@@ -4,7 +4,8 @@
     android:description="@string/morph_orientation_service_description"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:notificationTimeout="100"
-    android:accessibilityFlags="flagReportViewIds"
+    android:notificationTimeout="80"
+    android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="false"
-    android:settingsActivity="com.zibashu.morphos.MainActivity" />
+    android:settingsActivity="com.zibashu.morphos.MainActivity"
+    android:summary="@string/morph_orientation_service_summary" />

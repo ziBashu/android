@@ -65,8 +65,9 @@ class MorphHubScreen extends StatelessWidget {
                   ],
                   const SizedBox(height: 10),
                   Text(
-                    'Packs + per-app rules + gestures. '
-                    'Phase 5: Morph Store · Creator · community morphpack/v1 share.',
+                    'Environments · orientation · intelligence · packs. '
+                    'Shape: ${c.profileId.shape.label}. '
+                    'Mode: ${c.intelligenceMode.label}.',
                     style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
                   ),
                   const SizedBox(height: 12),
@@ -111,12 +112,17 @@ class MorphHubScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Morph profiles',
+              'Environments (device shapes)',
               style: TextStyle(
                 color: p.ink,
                 fontWeight: FontWeight.w800,
                 fontSize: 15,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'A phone is not always a phone — pick the tool you need now.',
+              style: TextStyle(color: p.muted, fontSize: 12),
             ),
             const SizedBox(height: 8),
             ...MorphProfileId.values.map((profile) {
@@ -160,11 +166,18 @@ class MorphHubScreen extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
+                                  profile.shape.blurb,
+                                  style: TextStyle(
+                                    color: p.muted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                Text(
                                   '${env.themeId.label} · ${env.wallpaperId.label} · '
                                   'P:${env.layoutPortrait.label}/L:${env.layoutLandscape.label}',
                                   style: TextStyle(
                                     color: p.muted,
-                                    fontSize: 11,
+                                    fontSize: 10,
                                   ),
                                 ),
                               ],
@@ -180,6 +193,86 @@ class MorphHubScreen extends StatelessWidget {
               );
             }),
             const SizedBox(height: 8),
+            Text(
+              'Intelligence',
+              style: TextStyle(
+                color: p.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 8),
+            GlassPanel(
+              palette: p,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: IntelligenceMode.values.map((m) {
+                      final sel = c.intelligenceMode == m;
+                      return ChoiceChip(
+                        label: Text(m.label),
+                        selected: sel,
+                        onSelected: (_) => c.setIntelligenceMode(m),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    c.intelligenceMode.blurb,
+                    style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Context rules (IF / THEN)',
+              style: TextStyle(
+                color: p.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Advanced mode honors these for category; charging / keyboard / display too.',
+              style: TextStyle(color: p.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            GlassPanel(
+              palette: p,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                children: c.contextRules.map((rule) {
+                  return SwitchListTile(
+                    title: Text(
+                      rule.label ?? '${rule.trigger.name} → ${rule.profileId.label}',
+                      style: TextStyle(color: p.ink, fontSize: 13),
+                    ),
+                    subtitle: Text(
+                      'THEN ${rule.profileId.label}'
+                      '${rule.matchValue != null ? ' · ${rule.matchValue}' : ''}',
+                      style: TextStyle(color: p.muted, fontSize: 11),
+                    ),
+                    value: rule.enabled,
+                    onChanged: (v) => c.setContextRule(
+                      MorphContextRule(
+                        id: rule.id,
+                        trigger: rule.trigger,
+                        profileId: rule.profileId,
+                        matchValue: rule.matchValue,
+                        enabled: v,
+                        label: rule.label,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 14),
             Text(
               'Per-app morph rules',
               style: TextStyle(
@@ -209,7 +302,7 @@ class MorphHubScreen extends StatelessWidget {
                     title: Text('Time-based morph',
                         style: TextStyle(color: p.ink)),
                     subtitle: Text(
-                      'Morning work · Day phone · Evening relax · Night reading',
+                      'Morning work · Day pocket · Evening relax · Night reading',
                       style: TextStyle(color: p.muted, fontSize: 11),
                     ),
                     value: c.timeBasedMorph,

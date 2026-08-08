@@ -40,10 +40,26 @@ class MorphSystemBridge(
             "setGlobalOrientation" -> {
                 val mode = call.argument<String>("mode") ?: "sensor"
                 MorphOrientationStore.setGlobalMode(context, mode)
-                if (MorphOrientationStore.isEnabled(context)) {
+                val applied = if (MorphOrientationStore.isEnabled(context)) {
                     MorphOrientationApplier.apply(context, mode)
+                } else {
+                    false
                 }
-                result.success(true)
+                result.success(applied)
+            }
+            "applyGlobalOrientationNow" -> {
+                val mode = call.argument<String>("mode") ?: "sensor"
+                MorphOrientationStore.setGlobalMode(context, mode)
+                MorphOrientationStore.setEnabled(context, true)
+                val applied = MorphOrientationApplier.apply(context, mode)
+                MorphOrientationService.reapply(context)
+                result.success(applied)
+            }
+            "testRotationPulse" -> {
+                MorphOrientationStore.setEnabled(context, true)
+                val ok = MorphOrientationApplier.apply(context, "landscape")
+                MorphOrientationStore.setGlobalMode(context, "landscape")
+                result.success(if (ok) "landscape" else null)
             }
             "syncPackageRules" -> {
                 @Suppress("UNCHECKED_CAST")
@@ -139,6 +155,8 @@ class MorphSystemBridge(
             mapOf(
                 "systemMorphEnabled" to MorphOrientationStore.isEnabled(context),
                 "accessibilityRunning" to MorphOrientationService.isRunning(),
+                "accessibilityEnabled" to
+                    MorphOrientationService.isEnabledInSettings(context),
                 "canWriteSettings" to MorphOrientationApplier.canWrite(context),
                 "canDrawOverlays" to Settings.canDrawOverlays(context),
                 "globalOrientation" to MorphOrientationStore.globalMode(context),
@@ -146,6 +164,7 @@ class MorphSystemBridge(
                     (MorphOrientationStore.lastForeground(context) ?: ""),
                 "lastAppliedMode" to
                     (MorphOrientationStore.lastMode(context) ?: ""),
+                "lastApplyOk" to MorphOrientationApplier.canWrite(context),
                 "displayCount" to (info["displayCount"] ?: 1),
                 "hasExternalDisplay" to (info["hasExternalDisplay"] ?: false),
                 "isDefaultHome" to (platform["isDefaultHome"] ?: false),
@@ -159,11 +178,13 @@ class MorphSystemBridge(
             mapOf(
                 "systemMorphEnabled" to false,
                 "accessibilityRunning" to false,
+                "accessibilityEnabled" to false,
                 "canWriteSettings" to false,
                 "canDrawOverlays" to false,
                 "globalOrientation" to "sensor",
                 "lastForegroundPackage" to "",
                 "lastAppliedMode" to "",
+                "lastApplyOk" to false,
                 "displayCount" to 1,
                 "hasExternalDisplay" to false,
                 "isDefaultHome" to false,

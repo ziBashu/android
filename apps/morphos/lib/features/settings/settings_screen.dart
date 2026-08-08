@@ -9,7 +9,9 @@ import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
 import '../ecosystem/morph_creator_screen.dart';
 import '../ecosystem/morph_store_screen.dart';
+import '../connection/phone_connection_screen.dart';
 import '../platform/platform_screen.dart';
+import '../vision/vision_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -40,6 +42,54 @@ class SettingsScreen extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
+            _section(c, 'What MorphOS is', [
+              Text(
+                'Personal adaptive environment layer — Android gives apps, '
+                'MorphOS gives environments.',
+                style: TextStyle(color: p.muted, fontSize: 13, height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.auto_awesome, color: p.accentSecondary),
+                title: Text('Product vision · 12 questions',
+                    style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Active: ${c.profileId.shape.label} · ${c.intelligenceMode.label}',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                trailing: Icon(Icons.chevron_right, color: p.muted),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ListenableBuilder(
+                        listenable: c,
+                        builder: (_, __) => VisionScreen(controller: c),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ]),
+            _section(c, 'Intelligence', [
+              Text(
+                c.intelligenceMode.blurb,
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: IntelligenceMode.values.map((m) {
+                  final sel = c.intelligenceMode == m;
+                  return ChoiceChip(
+                    label: Text(m.label),
+                    selected: sel,
+                    onSelected: (_) => c.setIntelligenceMode(m),
+                  );
+                }).toList(),
+              ),
+            ]),
             _section(c, 'Theme engine', [
               Wrap(
                 spacing: 8,
@@ -178,14 +228,36 @@ class SettingsScreen extends StatelessWidget {
                 },
               ),
             ]),
-            _section(c, 'System Morph · Phase 2+', [
+            _section(c, 'Phone connection', [
               Text(
-                'Applies morph orientation system-wide (Rotation-style). '
-                'Requires Accessibility + Modify system settings. '
-                'MorphOS only uses foreground package + orientation — no password reading.',
+                'Detect installed apps (rename + icons in MorphOS) and '
+                'system-wide rotation (Accessibility + WRITE_SETTINGS).',
                 style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
               ),
               const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.phonelink_setup, color: p.accentSecondary),
+                title: Text('Open phone connection', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.systemStatus.readyForSystemMorph
+                      ? 'System morph ready · ${c.systemStatus.lastAppliedMode ?? c.systemStatus.globalOrientation}'
+                      : 'Permissions needed for whole-device rotation',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                trailing: Icon(Icons.chevron_right, color: p.muted),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ListenableBuilder(
+                        listenable: c,
+                        builder: (_, __) =>
+                            PhoneConnectionScreen(controller: c),
+                      ),
+                    ),
+                  );
+                },
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text('System-wide morph orientation',
@@ -196,73 +268,85 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 value: c.systemMorphEnabled,
                 onChanged: (v) async {
-                  if (v) {
-                    await c.refreshSystemStatus();
-                    if (!c.systemStatus.accessibilityRunning) {
-                      await SystemMorphBridge.openAccessibilitySettings();
-                    }
-                    if (!c.systemStatus.canWriteSettings) {
-                      await SystemMorphBridge.openWriteSettings();
-                    }
-                  }
                   await c.setSystemMorphEnabled(v);
                   await c.refreshSystemStatus();
+                  if (context.mounted && c.lastMorphReason != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(c.lastMorphReason!)),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.science_outlined, color: p.accentSecondary),
+                title: Text('Test device rotation', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Forces landscape system-wide (needs permissions)',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () async {
+                  final msg = await c.testSystemRotation();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(msg)),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.bolt_outlined, color: p.accentSecondary),
+                title: Text(
+                  'Apply ${c.profileId.systemOrientationMode} now',
+                  style: TextStyle(color: p.ink),
+                ),
+                onTap: () async {
+                  final ok = await c.triggerSystemOrientationNow();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'Applied device-wide'
+                              : 'Failed — open Phone connection for permissions',
+                        ),
+                      ),
+                    );
+                  }
                 },
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.accessibility_new, color: p.accentSecondary),
-                title: Text('Open Accessibility settings',
+                title: Text('Accessibility settings',
                     style: TextStyle(color: p.ink)),
                 subtitle: Text(
-                  c.systemStatus.accessibilityRunning
-                      ? 'Service running'
+                  c.systemStatus.a11yOk
+                      ? (c.systemStatus.accessibilityRunning
+                          ? 'Service running'
+                          : 'Enabled in settings')
                       : 'Enable “MorphOS System Morph”',
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),
                 onTap: () async {
                   await SystemMorphBridge.openAccessibilitySettings();
-                  await Future<void>.delayed(const Duration(seconds: 1));
-                  await c.refreshSystemStatus();
                 },
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.settings_suggest_outlined,
                     color: p.accentSecondary),
-                title: Text('Allow modify system settings',
+                title: Text('Modify system settings',
                     style: TextStyle(color: p.ink)),
                 subtitle: Text(
                   c.systemStatus.canWriteSettings
                       ? 'WRITE_SETTINGS granted'
-                      : 'Needed to lock rotation',
+                      : 'Needed to lock rotation for whole phone',
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),
                 onTap: () async {
                   await SystemMorphBridge.openWriteSettings();
-                  await Future<void>.delayed(const Duration(seconds: 1));
-                  await c.refreshSystemStatus();
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.refresh, color: p.accentSecondary),
-                title: Text('Refresh system status',
-                    style: TextStyle(color: p.ink)),
-                onTap: () async {
-                  await c.refreshSystemStatus();
-                  await c.syncSystemMorph();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'a11y=${c.systemStatus.accessibilityRunning} '
-                          'write=${c.systemStatus.canWriteSettings} '
-                          'displays=${c.displayInfo.displayCount}',
-                        ),
-                      ),
-                    );
-                  }
                 },
               ),
             ]),
@@ -456,11 +540,57 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
             _section(c, 'About', [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/brand/morphos_launcher_1024.png',
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.smartphone,
+                        size: 48,
+                        color: p.accentSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MorphOS',
+                          style: TextStyle(
+                            color: p.ink,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const FromZiBashuBadge(
+                          compact: true,
+                          openWebsite: true,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'v0.7.0 · personal adaptive environment',
+                          style: TextStyle(color: p.muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               Text(
-                'MorphOS 0.6.1 — hardened platform release.\n'
+                'Custom launcher icon: morphing phones in ziBashu forest + cream, '
+                'with the green brand mark.\n'
                 'No cleartext · no backup leak · gated system services.\n'
-                'Home · QS tile · Store · Creator · desktop · morphs.\n'
-                'Custom ROM remains long-term. from ziBashu.',
+                'Custom ROM remains long-term.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 13),
               ),
             ]),
@@ -475,8 +605,9 @@ class SettingsScreen extends StatelessWidget {
     final s = c.systemStatus;
     if (!s.supported) return 'Android only';
     final bits = <String>[
-      if (s.accessibilityRunning) 'a11y on' else 'a11y off',
+      if (s.a11yOk) 'a11y on' else 'a11y off',
       if (s.canWriteSettings) 'write ok' else 'need write',
+      if (s.readyForSystemMorph) 'ready' else 'setup needed',
       'mode ${c.profileId.systemOrientationMode}',
     ];
     return bits.join(' · ');

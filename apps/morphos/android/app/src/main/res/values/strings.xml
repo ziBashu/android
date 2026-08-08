@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MorphOS</string>
-    <string name="morph_orientation_service_label">MorphOS System Morph</string>
-    <string name="morph_orientation_service_description">Allows MorphOS to detect the foreground app and apply morph orientation profiles (portrait / landscape) system-wide, like per-app rotation managers. MorphOS does not read passwords or personal content.</string>
-    <string name="morph_tile_label">MorphOS Morph</string>
+    <string name="morph_orientation_service_label">MorphOS System Morph · from ziBashu</string>
+    <string name="morph_orientation_service_summary">System-wide morph orientation (from ziBashu)</string>
+    <string name="morph_orientation_service_description">Allows MorphOS (from ziBashu) to detect the foreground app and apply morph orientation profiles (portrait / landscape) system-wide. MorphOS does not read passwords or personal content — only package name + rotation.</string>
+    <string name="morph_tile_label">MorphOS · ziBashu</string>
 </resources>
