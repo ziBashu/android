@@ -252,15 +252,46 @@ class MorphEnvironment {
       };
 
   static MorphEnvironment fromJson(Map<String, dynamic> m) {
+    T byName<T extends Enum>(List<T> values, String? name, T fallback) {
+      if (name == null) return fallback;
+      for (final v in values) {
+        if (v.name == name) return v;
+      }
+      return fallback;
+    }
+
+    final profileId = byName(
+      MorphProfileId.values,
+      m['profileId'] as String?,
+      MorphProfileId.phone,
+    );
     return MorphEnvironment(
-      profileId: MorphProfileId.values.byName(m['profileId'] as String),
-      themeId: MorphThemeId.values.byName(m['themeId'] as String),
-      wallpaperId: WallpaperId.values.byName(m['wallpaperId'] as String),
-      layoutPortrait:
-          MorphLayoutId.values.byName(m['layoutPortrait'] as String),
-      layoutLandscape:
-          MorphLayoutId.values.byName(m['layoutLandscape'] as String),
-      iconStyle: IconStyleId.values.byName(m['iconStyle'] as String),
+      profileId: profileId,
+      themeId: byName(
+        MorphThemeId.values,
+        m['themeId'] as String?,
+        MorphThemeId.neon,
+      ),
+      wallpaperId: byName(
+        WallpaperId.values,
+        m['wallpaperId'] as String?,
+        WallpaperId.cyberpunk,
+      ),
+      layoutPortrait: byName(
+        MorphLayoutId.values,
+        m['layoutPortrait'] as String?,
+        MorphLayoutId.grid,
+      ),
+      layoutLandscape: byName(
+        MorphLayoutId.values,
+        m['layoutLandscape'] as String?,
+        MorphLayoutId.grid,
+      ),
+      iconStyle: byName(
+        IconStyleId.values,
+        m['iconStyle'] as String?,
+        IconStyleId.squircle,
+      ),
       showLabels: m['showLabels'] as bool? ?? true,
       iconScale: (m['iconScale'] as num?)?.toDouble() ?? 1.0,
       gridColumns: m['gridColumns'] as int? ?? 4,

@@ -23,10 +23,20 @@ class AppCatalog {
         usingDeviceApps = false;
         return;
       }
-      final List<AppInfo> installed = await InstalledApps.getInstalledApps(
-        true, // exclude system apps where possible
-        true, // with icons
-      );
+      // Icons off first pass — full icon decode can OOM / hang ("error loading")
+      // on emulators and large device app lists. Labels load instantly.
+      List<AppInfo> installed;
+      try {
+        installed = await InstalledApps.getInstalledApps(
+          true, // exclude system apps where possible
+          false, // no icons (stable)
+        );
+      } catch (e) {
+        lastError = 'App list: $e';
+        apps = List<MorphAppItem>.from(kDemoApps);
+        usingDeviceApps = false;
+        return;
+      }
       if (installed.isEmpty) {
         apps = List<MorphAppItem>.from(kDemoApps);
         usingDeviceApps = false;
@@ -40,7 +50,6 @@ class AppCatalog {
         final name = a.name.trim().isEmpty ? pkg : a.name.trim();
         if (name.isEmpty) continue;
         final cat = inferAppCategory(name: name, packageName: pkg);
-        final iconBytes = a.icon;
         mapped.add(
           MorphAppItem(
             id: pkg,
@@ -50,7 +59,6 @@ class AppCatalog {
             color: _colorForCategory(cat),
             isSystemDemo: false,
             category: cat,
-            iconBytes: iconBytes == null ? null : List<int>.from(iconBytes),
           ),
         );
       }

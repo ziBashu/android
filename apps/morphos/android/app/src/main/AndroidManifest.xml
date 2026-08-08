@@ -55,6 +55,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- API 36/37 x86_64 emulator Impeller GLES paints black; Skia is reliable. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <queries>
         <intent>

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -98,8 +99,14 @@ class MorphController extends ChangeNotifier {
   /// Phase 2: last transition label for UI.
   String? lastMorphReason;
 
+  /// Load failure message (null if OK).
+  String? loadError;
+
   /// Transition tick for AnimatedSwitcher / overlays.
   int morphGeneration = 0;
+
+  /// Landscape / multi-orientation only after first valid home frame (avoids width=0 black screen).
+  bool orientationUnlocked = false;
 
   MorphPalette get palette => MorphPalette.forTheme(themeId);
 
@@ -116,78 +123,133 @@ class MorphController extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    var raw = prefs.getString(_prefsKey);
-    raw ??= prefs.getString(_prefsKeyLegacy);
-    if (raw != null) {
-      try {
-        final m = jsonDecode(raw) as Map<String, dynamic>;
-        onboardingDone = m['onboardingDone'] as bool? ?? false;
-        setupFocus = m['setupFocus'] as String? ?? 'entertainment';
-        profileId = MorphProfileId.values.byName(
-          m['profileId'] as String? ?? MorphProfileId.phone.name,
-        );
-        themeId = MorphThemeId.values.byName(
-          m['themeId'] as String? ?? MorphThemeId.neon.name,
-        );
-        layoutId = MorphLayoutId.values.byName(
-          m['layoutId'] as String? ?? MorphLayoutId.grid.name,
-        );
-        iconStyle = IconStyleId.values.byName(
-          m['iconStyle'] as String? ?? IconStyleId.squircle.name,
-        );
-        wallpaperId = WallpaperId.values.byName(
-          m['wallpaperId'] as String? ?? WallpaperId.cyberpunk.name,
-        );
-        showLabels = m['showLabels'] as bool? ?? true;
-        iconScale = (m['iconScale'] as num?)?.toDouble() ?? 1.0;
-        gridColumns = m['gridColumns'] as int? ?? 4;
-        quietMode = m['quietMode'] as bool? ?? false;
-        largeTargets = m['largeTargets'] as bool? ?? false;
-        renames = Map<String, String>.from(
-          (m['renames'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? {},
-        );
-        dockIds = List<String>.from(m['dockIds'] as List? ?? dockIds);
-        homeIds = List<String>.from(m['homeIds'] as List? ?? homeIds);
-        timeBasedMorph = m['timeBasedMorph'] as bool? ?? false;
-        perAppMorphEnabled = m['perAppMorphEnabled'] as bool? ?? true;
-        chargeMorphEnabled = m['chargeMorphEnabled'] as bool? ?? true;
-        categoryMorphEnabled = m['categoryMorphEnabled'] as bool? ?? true;
-        systemMorphEnabled = m['systemMorphEnabled'] as bool? ?? false;
-        desktopModeEnabled = m['desktopModeEnabled'] as bool? ?? true;
-        floatingWindowsEnabled = m['floatingWindowsEnabled'] as bool? ?? true;
+    loadError = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var raw = prefs.getString(_prefsKey);
+      raw ??= prefs.getString(_prefsKeyLegacy);
+      if (raw != null) {
+        try {
+          final m = jsonDecode(raw) as Map<String, dynamic>;
+          onboardingDone = m['onboardingDone'] as bool? ?? false;
+          setupFocus = m['setupFocus'] as String? ?? 'entertainment';
+          profileId = _enumByName(
+            MorphProfileId.values,
+            m['profileId'] as String?,
+            MorphProfileId.phone,
+          );
+          themeId = _enumByName(
+            MorphThemeId.values,
+            m['themeId'] as String?,
+            MorphThemeId.neon,
+          );
+          layoutId = _enumByName(
+            MorphLayoutId.values,
+            m['layoutId'] as String?,
+            MorphLayoutId.grid,
+          );
+          iconStyle = _enumByName(
+            IconStyleId.values,
+            m['iconStyle'] as String?,
+            IconStyleId.squircle,
+          );
+          wallpaperId = _enumByName(
+            WallpaperId.values,
+            m['wallpaperId'] as String?,
+            WallpaperId.cyberpunk,
+          );
+          showLabels = m['showLabels'] as bool? ?? true;
+          iconScale = (m['iconScale'] as num?)?.toDouble() ?? 1.0;
+          gridColumns = m['gridColumns'] as int? ?? 4;
+          quietMode = m['quietMode'] as bool? ?? false;
+          largeTargets = m['largeTargets'] as bool? ?? false;
+          renames = Map<String, String>.from(
+            (m['renames'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? {},
+          );
+          dockIds = List<String>.from(m['dockIds'] as List? ?? dockIds);
+          homeIds = List<String>.from(m['homeIds'] as List? ?? homeIds);
+          timeBasedMorph = m['timeBasedMorph'] as bool? ?? false;
+          perAppMorphEnabled = m['perAppMorphEnabled'] as bool? ?? true;
+          chargeMorphEnabled = m['chargeMorphEnabled'] as bool? ?? true;
+          categoryMorphEnabled = m['categoryMorphEnabled'] as bool? ?? true;
+          systemMorphEnabled = m['systemMorphEnabled'] as bool? ?? false;
+          desktopModeEnabled = m['desktopModeEnabled'] as bool? ?? true;
+          floatingWindowsEnabled =
+              m['floatingWindowsEnabled'] as bool? ?? true;
 
-        final envMap = m['environments'] as Map?;
-        if (envMap != null) {
-          for (final e in envMap.entries) {
-            final pid = MorphProfileId.values.byName(e.key as String);
-            environments[pid] = MorphEnvironment.fromJson(
-              Map<String, dynamic>.from(e.value as Map),
-            );
+          final envMap = m['environments'] as Map?;
+          if (envMap != null) {
+            for (final e in envMap.entries) {
+              try {
+                final pid = MorphProfileId.values.byName(e.key as String);
+                environments[pid] = MorphEnvironment.fromJson(
+                  Map<String, dynamic>.from(e.value as Map),
+                );
+              } catch (_) {
+                // Skip corrupt pack entry.
+              }
+            }
           }
-        }
 
-        final rules = m['appRules'] as List?;
-        if (rules != null) {
-          appRules = rules
-              .map((e) => AppMorphRule.fromJson(Map<String, dynamic>.from(e as Map)))
-              .toList();
+          final rules = m['appRules'] as List?;
+          if (rules != null) {
+            appRules = rules
+                .map((e) {
+                  try {
+                    return AppMorphRule.fromJson(
+                      Map<String, dynamic>.from(e as Map),
+                    );
+                  } catch (_) {
+                    return null;
+                  }
+                })
+                .whereType<AppMorphRule>()
+                .toList();
+          }
+        } catch (e) {
+          loadError = 'Prefs reset ($e)';
+          // Corrupt prefs — keep defaults.
         }
-      } catch (_) {
-        // Corrupt prefs — keep defaults.
       }
+
+      if (timeBasedMorph) {
+        try {
+          await _applyTimeBasedMorph(
+            reason: 'time schedule on load',
+            persist: false,
+          );
+        } catch (_) {}
+      }
+
+      // Stay portrait until HomeScreen unlocks (prevents width=0 black frame).
+      orientationUnlocked = false;
+      await applyOrientation(force: false);
+    } catch (e) {
+      loadError = 'Load failed: $e';
+    } finally {
+      ready = true;
+      notifyListeners();
     }
 
-    if (timeBasedMorph) {
-      await _applyTimeBasedMorph(reason: 'time schedule on load', persist: false);
-    }
+    // Native bridge after UI is ready — never block first paint.
+    Future<void>.microtask(() async {
+      try {
+        await refreshSystemStatus();
+        await syncSystemMorph();
+      } catch (_) {}
+    });
+  }
 
-    ready = true;
-    // Orientation applied after first home frame (avoids width=0 relaunch).
-    await applyOrientation(force: false);
-    await refreshSystemStatus();
-    await syncSystemMorph();
-    notifyListeners();
+  static T _enumByName<T extends Enum>(
+    List<T> values,
+    String? name,
+    T fallback,
+  ) {
+    if (name == null || name.isEmpty) return fallback;
+    for (final v in values) {
+      if (v.name == name) return v;
+    }
+    return fallback;
   }
 
   Future<void> _persist() async {
@@ -279,8 +341,11 @@ class MorphController extends ChangeNotifier {
     layoutId = env.layoutPortrait;
     lastMorphReason = reason;
     morphGeneration++;
-    await applyOrientation(force: onboardingDone);
-    await syncSystemMorph();
+    // Only rotate when home has painted once (avoids black / width=0).
+    await applyOrientation(force: false);
+    if (orientationUnlocked) {
+      unawaited(syncSystemMorph());
+    }
     if (persist) await _persist();
     notifyListeners();
   }
@@ -560,18 +625,25 @@ class MorphController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Apply orientation for active morph. Call after first frame when possible.
-  /// Keeps portrait-only until user leaves onboarding (avoids zero-size relaunch).
+  /// Unlock multi-orientation after first home frame with a valid size.
+  Future<void> unlockOrientationAfterFirstFrame() async {
+    if (orientationUnlocked) return;
+    orientationUnlocked = true;
+    await applyOrientation(force: true);
+    unawaited(syncSystemMorph());
+  }
+
+  /// Apply orientation for active morph.
+  /// Until [orientationUnlocked], always portrait (prevents black width=0 screen).
   Future<void> applyOrientation({bool force = false}) async {
-    if (!force && !onboardingDone) {
-      try {
+    try {
+      if (!orientationUnlocked || !onboardingDone) {
         await SystemChrome.setPreferredOrientations(const [
           DeviceOrientation.portraitUp,
         ]);
-      } catch (_) {}
-      return;
-    }
-    try {
+        return;
+      }
+      if (!force && !onboardingDone) return;
       await SystemChrome.setPreferredOrientations(profileId.orientations);
     } catch (_) {
       // Ignore in unit tests / headless environments.
@@ -599,7 +671,9 @@ class MorphController extends ChangeNotifier {
     isCharging = false;
     profileBeforeCharge = null;
     lastMorphReason = null;
+    loadError = null;
     morphGeneration = 0;
+    orientationUnlocked = false;
     pointerConnected = false;
     keyboardConnected = false;
     final env = MorphEnvironment.defaultsFor(MorphProfileId.phone);

@@ -16,7 +16,7 @@
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Transformable phone interface — adaptive launcher, system morph, desktop mode. |
-| Version | **`0.4.0+4`** |
+| Version | **`0.4.1+5`** |
 
 ## Product line
 

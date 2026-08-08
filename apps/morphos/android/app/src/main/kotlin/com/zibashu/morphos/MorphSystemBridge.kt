@@ -91,40 +91,75 @@ class MorphSystemBridge(private val context: Context) : MethodChannel.MethodCall
     }
 
     private fun statusMap(): Map<String, Any?> {
-        val enabled = MorphOrientationStore.isEnabled(context)
-        return mapOf(
-            "systemMorphEnabled" to enabled,
-            "accessibilityRunning" to MorphOrientationService.isRunning(),
-            "canWriteSettings" to MorphOrientationApplier.canWrite(context),
-            "canDrawOverlays" to Settings.canDrawOverlays(context),
-            "globalOrientation" to MorphOrientationStore.globalMode(context),
-            "lastForegroundPackage" to MorphOrientationStore.lastForeground(context),
-            "lastAppliedMode" to MorphOrientationStore.lastMode(context),
-            "displayCount" to displayInfo()["displayCount"],
-            "hasExternalDisplay" to displayInfo()["hasExternalDisplay"],
-        )
+        return try {
+            val info = displayInfo()
+            mapOf(
+                "systemMorphEnabled" to MorphOrientationStore.isEnabled(context),
+                "accessibilityRunning" to MorphOrientationService.isRunning(),
+                "canWriteSettings" to MorphOrientationApplier.canWrite(context),
+                "canDrawOverlays" to Settings.canDrawOverlays(context),
+                "globalOrientation" to MorphOrientationStore.globalMode(context),
+                "lastForegroundPackage" to
+                    (MorphOrientationStore.lastForeground(context) ?: ""),
+                "lastAppliedMode" to
+                    (MorphOrientationStore.lastMode(context) ?: ""),
+                "displayCount" to (info["displayCount"] ?: 1),
+                "hasExternalDisplay" to (info["hasExternalDisplay"] ?: false),
+            )
+        } catch (_: Exception) {
+            mapOf(
+                "systemMorphEnabled" to false,
+                "accessibilityRunning" to false,
+                "canWriteSettings" to false,
+                "canDrawOverlays" to false,
+                "globalOrientation" to "sensor",
+                "lastForegroundPackage" to "",
+                "lastAppliedMode" to "",
+                "displayCount" to 1,
+                "hasExternalDisplay" to false,
+            )
+        }
     }
 
     private fun displayInfo(): Map<String, Any?> {
-        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val displays = dm.displays
-        val external = displays.any { d ->
-            d.displayId != Display.DEFAULT_DISPLAY && d.state == Display.STATE_ON
-        }
-        val names = displays.map { d ->
+        return try {
+            val dm =
+                context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            val displays = dm.displays
+            val external = displays.any { d ->
+                d.displayId != Display.DEFAULT_DISPLAY && d.state == Display.STATE_ON
+            }
+            val names = displays.map { d ->
+                val size = try {
+                    Pair(d.mode.physicalWidth, d.mode.physicalHeight)
+                } catch (_: Exception) {
+                    Pair(0, 0)
+                }
+                mapOf(
+                    "id" to d.displayId,
+                    "name" to
+                        (if (Build.VERSION.SDK_INT >= 30) {
+                            d.name ?: "display-${d.displayId}"
+                        } else {
+                            "display-${d.displayId}"
+                        }),
+                    "isDefault" to (d.displayId == Display.DEFAULT_DISPLAY),
+                    "state" to d.state,
+                    "width" to size.first,
+                    "height" to size.second,
+                )
+            }
             mapOf(
-                "id" to d.displayId,
-                "name" to (if (Build.VERSION.SDK_INT >= 30) d.name else "display-${d.displayId}"),
-                "isDefault" to (d.displayId == Display.DEFAULT_DISPLAY),
-                "state" to d.state,
-                "width" to d.mode?.physicalWidth,
-                "height" to d.mode?.physicalHeight,
+                "displayCount" to displays.size,
+                "hasExternalDisplay" to external,
+                "displays" to names,
+            )
+        } catch (_: Exception) {
+            mapOf(
+                "displayCount" to 1,
+                "hasExternalDisplay" to false,
+                "displays" to emptyList<Map<String, Any?>>(),
             )
         }
-        return mapOf(
-            "displayCount" to displays.size,
-            "hasExternalDisplay" to external,
-            "displays" to names,
-        )
     }
 }

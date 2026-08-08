@@ -39,11 +39,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     HardwareKeyboard.instance.addHandler(_onKey);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await c.applyOrientation(force: true);
-      await c.refreshSystemStatus();
-      await c.syncSystemMorph();
-      await _catalog.refresh();
-      await _adaptive.start();
+      // Wait until Flutter has a real size — prevents black width=0 frame.
+      final size = MediaQuery.sizeOf(context);
+      if (size.width > 32 && size.height > 32) {
+        await c.unlockOrientationAfterFirstFrame();
+      } else {
+        // Retry next frame if still zero-sized.
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await c.unlockOrientationAfterFirstFrame();
+        });
+      }
+      try {
+        await c.refreshSystemStatus();
+        await c.syncSystemMorph();
+      } catch (_) {}
+      try {
+        await _catalog.refresh();
+      } catch (_) {}
+      try {
+        await _adaptive.start();
+      } catch (_) {}
       if (mounted) setState(() => _catalogReady = true);
     });
   }
@@ -220,7 +236,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final useDesktop = c.showDesktopShell || layout == MorphLayoutId.desktop;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      // Opaque fallback so a failed child never shows pure black emptiness.
+      backgroundColor: p.scaffoldTint,
       body: MorphBackground(
         wallpaperId: c.wallpaperId,
         palette: p,

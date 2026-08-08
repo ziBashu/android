@@ -8,10 +8,8 @@ import 'features/onboarding/onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Portrait first frame — avoids zero-size relaunch while prefs load.
-  SystemChrome.setPreferredOrientations(const [
-    DeviceOrientation.portraitUp,
-  ]);
+  // Do NOT lock orientation before first frame — causes Width=0 / stuck splash
+  // on some Android 15–17 emulators. Portrait is applied after Home paints.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -70,7 +68,17 @@ class _MorphOSAppState extends State<MorphOSApp> {
             return const Scaffold(
               backgroundColor: Color(0xFF070A14),
               body: Center(
-                child: CircularProgressIndicator(color: Color(0xFF7C4DFF)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Color(0xFF7C4DFF)),
+                    SizedBox(height: 16),
+                    Text(
+                      'Loading MorphOS…',
+                      style: TextStyle(color: Color(0xFFB0B8D0)),
+                    ),
+                  ],
+                ),
               ),
             );
           }
