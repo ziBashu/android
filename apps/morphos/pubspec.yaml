@@ -1,7 +1,7 @@
 name: morphos
 description: MorphOS — transformable phone interface; adaptive launcher and morph profiles.
 publish_to: none
-version: 0.6.0+7
+version: 0.6.1+8
 
 environment:
   sdk: ^3.5.0

@@ -17,12 +17,18 @@ class MorphBootReceiver : BroadcastReceiver() {
         ) {
             return
         }
+        // Only reapply forced rotation when user enabled system morph.
+        // No network, no package scan — local prefs only.
         if (!MorphOrientationStore.isEnabled(context)) {
             Log.i(TAG, "Boot: system morph disabled — skip")
             return
         }
-        MorphOrientationService.reapply(context)
-        Log.i(TAG, "Boot: reapplied morph orientation")
+        try {
+            MorphOrientationService.reapply(context)
+            Log.i(TAG, "Boot: reapplied morph orientation")
+        } catch (e: Exception) {
+            Log.w(TAG, "Boot reapply failed: ${e.message}")
+        }
     }
 
     companion object {

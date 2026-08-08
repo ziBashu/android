@@ -152,10 +152,11 @@ object MorphPlatform {
             if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) &&
                 !rm.isRoleHeld(RoleManager.ROLE_HOME)
             ) {
-                activity.startActivityForResult(
-                    rm.createRequestRoleIntent(RoleManager.ROLE_HOME),
-                    REQ_HOME_ROLE,
-                )
+                // Prefer settings picker — no deprecated startActivityForResult.
+                // Role request still works via createRequestRoleIntent + NEW_TASK.
+                val intent = rm.createRequestRoleIntent(RoleManager.ROLE_HOME)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                activity.startActivity(intent)
                 true
             } else {
                 openHomeSettings(activity)
@@ -176,5 +177,4 @@ object MorphPlatform {
         }
     }
 
-    const val REQ_HOME_ROLE = 6106
 }

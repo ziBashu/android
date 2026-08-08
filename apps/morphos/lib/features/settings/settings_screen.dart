@@ -457,9 +457,9 @@ class SettingsScreen extends StatelessWidget {
             ]),
             _section(c, 'About', [
               Text(
-                'MorphOS 0.6.0 — Phase 6 Platform Layer.\n'
-                'Default home · QS tile · boot restore · system chrome.\n'
-                'Store · Creator · desktop · adaptive · system morph.\n'
+                'MorphOS 0.6.1 — hardened platform release.\n'
+                'No cleartext · no backup leak · gated system services.\n'
+                'Home · QS tile · Store · Creator · desktop · morphs.\n'
                 'Custom ROM remains long-term. from ziBashu.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 13),
               ),

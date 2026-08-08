@@ -12,51 +12,45 @@
 | Guest behavior | full offline + optional device app list |
 | Backend routes | none (Phase 5 store offline; online later) |
 | Local storage | SharedPreferences `morphos_state_v2` + native `morphos_system_v1` |
-| Permissions | INTERNET, VIBRATE, RECEIVE_BOOT_COMPLETED, QUERY_ALL_PACKAGES, SET_WALLPAPER, SET_WALLPAPER_HINTS, WRITE_SETTINGS, SYSTEM_ALERT_WINDOW, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, WAKE_LOCK, Accessibility, QS tile |
+| Permissions | INTERNET, VIBRATE, RECEIVE_BOOT_COMPLETED, QUERY_ALL_PACKAGES, SET_WALLPAPER, SET_WALLPAPER_HINTS, WRITE_SETTINGS, SYSTEM_ALERT_WINDOW, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Accessibility, QS tile |
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Transformable phone environment — platform layer, morph packs, desktop, system orientation. |
-| Version | **`0.6.0+7`** |
+| Version | **`0.6.1+8`** |
 
 ## Product line
 
 **Appearance → Behavior → Intelligence → Environment → Ecosystem → Platform**
 
-| Phase | Status in 0.6.0 |
+| Phase | Status in 0.6.1 |
 |-------|-----------------|
-| 0 Foundation | Done |
-| 1 Identity | Done |
-| 2 Morph Engine | Done |
-| 2+ System Morph (Accessibility) | Done |
-| 3 Adaptive Environment | Done |
-| 4 Desktop Mode | Done |
-| 5 Ecosystem (Store / Creator / share) | Done |
-| **6 Platform Layer** | **Done (control plane on stock Android)** |
+| 0–6 | Done (APK track) |
 | 6+ Custom ROM | Long-term vision (not this APK) |
 
-## Phase 6 behavior
+## Hardening (0.6.1)
 
-- **Platform Control** screen — readiness score, hook consent
-- **Default home** role / settings entry
-- **QS tile** “MorphOS Morph” cycles system orientation
-- **Boot receiver** reapplies system morph after reboot
-- **Battery unrestricted** request for survival
-- **System UI chrome** follows morph palette (immersive edge-to-edge)
-- **Keep screen on** in Desktop Morph / external display
-- Honest roadmap: full MorphOS ROM is future; this is the platform layer
+- [x] No secrets in client
+- [x] Package `com.zibashu.morphos` only
+- [x] HOME + LAUNCHER intents (Flutter-safe activity flags)
+- [x] minSdk ≥ 24
+- [x] **Cleartext traffic disabled** + `network_security_config`
+- [x] **allowBackup=false** + data extraction excludes
+- [x] Exported services permission-gated (a11y, QS tile)
+- [x] Boot receiver local-only reapply (no network)
+- [x] from ziBashu chrome on major surfaces
+- [x] Demo/offline when device APIs fail
+- [x] analyze / unit tests / harden_check
+- [ ] Warehub upload when requested
+- [ ] Play upload keystore (still debug-signed for sideload)
 
-## Phase 5 (retained)
+## Phase summary
 
-Morph Store · Creator · morphpack/v1 community share
+- **2+** Accessibility orientation + WRITE_SETTINGS  
+- **3** Adaptive time/charge/category + device apps  
+- **4** Desktop shell + floating tasks  
+- **5** Morph Store / Creator / morphpack/v1  
+- **6** Platform Control · QS tile · boot restore · chrome  
 
 ## References
 
 `docs/morphos-reference-notes.md` · `C:\Users\syxMa\ANDROID-reference`
-
-## Hardening
-
-- [x] No secrets
-- [x] HOME + LAUNCHER intents (Flutter-safe activity flags)
-- [x] minSdk ≥ 24
-- [x] analyze / unit tests
-- [ ] Warehub upload when requested
