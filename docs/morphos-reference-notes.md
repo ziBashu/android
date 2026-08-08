@@ -110,6 +110,7 @@ How real per-app / forced orientation works in the wild:
 | Per-app behavior | Yes (in-app morph rules + package rules to native) |
 | System-wide orientation | **Yes** — `MorphOrientationService` + WRITE_SETTINGS (consent) |
 | Desktop mode | **Yes** — rail/workspace/floating tasks + external display detect |
+| Morph Store / Creator | **Yes (0.5)** — offline packs + morphpack/v1 community share |
 
 ---
 

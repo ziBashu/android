@@ -6,10 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'morph_pack.dart';
 import 'morph_palette.dart';
 import 'system_morph_bridge.dart';
 
-/// Central MorphOS state — Phase 0–4 Morph Engine + system morph + desktop.
+/// Central MorphOS state — Phase 0–5 Morph Engine + ecosystem packs.
 class MorphController extends ChangeNotifier {
   MorphController();
 
@@ -81,6 +82,12 @@ class MorphController extends ChangeNotifier {
 
   /// Phase 4: floating task panels on desktop workspace.
   bool floatingWindowsEnabled = true;
+
+  /// Phase 5: installed / created morph packs (Morph Store + Creator).
+  List<MorphPack> packLibrary = [];
+
+  /// Phase 5: last applied store/creator pack id.
+  String? activePackId;
 
   /// Phase 3 runtime flags (not all persisted).
   bool isCharging = false;
@@ -176,6 +183,7 @@ class MorphController extends ChangeNotifier {
           desktopModeEnabled = m['desktopModeEnabled'] as bool? ?? true;
           floatingWindowsEnabled =
               m['floatingWindowsEnabled'] as bool? ?? true;
+          activePackId = m['activePackId'] as String?;
 
           final envMap = m['environments'] as Map?;
           if (envMap != null) {
@@ -204,6 +212,22 @@ class MorphController extends ChangeNotifier {
                   }
                 })
                 .whereType<AppMorphRule>()
+                .toList();
+          }
+
+          final packs = m['packLibrary'] as List?;
+          if (packs != null) {
+            packLibrary = packs
+                .map((e) {
+                  try {
+                    return MorphPack.fromJson(
+                      Map<String, dynamic>.from(e as Map),
+                    );
+                  } catch (_) {
+                    return null;
+                  }
+                })
+                .whereType<MorphPack>()
                 .toList();
           }
         } catch (e) {
@@ -280,11 +304,29 @@ class MorphController extends ChangeNotifier {
         'systemMorphEnabled': systemMorphEnabled,
         'desktopModeEnabled': desktopModeEnabled,
         'floatingWindowsEnabled': floatingWindowsEnabled,
+        'activePackId': activePackId,
         'environments': {
           for (final e in environments.entries) e.key.name: e.value.toJson(),
         },
         'appRules': appRules.map((r) => r.toJson()).toList(),
+        'packLibrary': packLibrary.map((p) => p.toJson()).toList(),
       };
+
+  /// Built-in store shelf (not all installed).
+  List<MorphPack> get storeCatalog => kBuiltInMorphStore();
+
+  bool isPackInstalled(String id) =>
+      packLibrary.any((p) => p.id == id);
+
+  MorphPack? packById(String id) {
+    for (final p in packLibrary) {
+      if (p.id == id) return p;
+    }
+    for (final p in storeCatalog) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
 
   /// Desktop shell when Desktop Morph active, or external display + toggle.
   bool get showDesktopShell {
@@ -625,6 +667,112 @@ class MorphController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Phase 5: Morph Store / Creator / community packs ──
+
+  /// Install a store or community pack into the local library.
+  Future<void> installPack(MorphPack pack) async {
+    packLibrary = [
+      ...packLibrary.where((p) => p.id != pack.id),
+      pack,
+    ];
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> uninstallPack(String id) async {
+    packLibrary = packLibrary.where((p) => p.id != id).toList();
+    if (activePackId == id) activePackId = null;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Apply pack look onto its target profile and switch to that profile.
+  Future<void> applyPack(
+    MorphPack pack, {
+    String reason = 'pack apply',
+  }) async {
+    environments[pack.targetProfile] = pack.toEnvironment();
+    activePackId = pack.id;
+    if (!isPackInstalled(pack.id)) {
+      packLibrary = [...packLibrary, pack];
+    }
+    await applyProfile(pack.targetProfile, reason: '$reason:${pack.name}');
+  }
+
+  /// Morph Creator — capture current look as a new library pack.
+  Future<MorphPack> createPackFromCurrent({
+    required String name,
+    String description = '',
+    String author = 'me',
+    List<String> tags = const [],
+    MorphProfileId? bindProfile,
+  }) async {
+    final profile = bindProfile ?? profileId;
+    final id =
+        'user.${DateTime.now().millisecondsSinceEpoch}.${name.hashCode.abs()}';
+    final pack = MorphPack(
+      id: id,
+      name: name.trim().isEmpty ? 'My Morph' : name.trim(),
+      author: author.trim().isEmpty ? 'me' : author.trim(),
+      description: description.trim(),
+      category: 'community',
+      themeId: themeId,
+      wallpaperId: wallpaperId,
+      layoutPortrait: layoutId,
+      layoutLandscape: activeEnvironment.layoutLandscape,
+      iconStyle: iconStyle,
+      targetProfile: profile,
+      showLabels: showLabels,
+      iconScale: iconScale,
+      gridColumns: gridColumns,
+      dockIds: List<String>.from(dockIds),
+      homeIds: List<String>.from(homeIds),
+      quietMode: quietMode,
+      largeTargets: largeTargets,
+      tags: tags,
+      version: 1,
+      builtIn: false,
+      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    await installPack(pack);
+    activePackId = pack.id;
+    await _persist();
+    notifyListeners();
+    return pack;
+  }
+
+  /// Export one pack as shareable morphpack/v1 JSON.
+  String exportPackJson(MorphPack pack) =>
+      const JsonEncoder.withIndent('  ').convert(pack.toJson());
+
+  /// Import pack from clipboard / community JSON.
+  Future<MorphPack?> importPackJson(String raw) async {
+    try {
+      final decoded = jsonDecode(raw);
+      Map<String, dynamic> map;
+      if (decoded is Map) {
+        map = Map<String, dynamic>.from(decoded);
+      } else {
+        return null;
+      }
+      // Allow wrapping: { "pack": { ... } }
+      if (map['pack'] is Map) {
+        map = Map<String, dynamic>.from(map['pack'] as Map);
+      }
+      final pack = MorphPack.fromJson({
+        ...map,
+        'builtIn': false,
+        'category': map['category'] as String? ?? 'community',
+        'id': map['id'] as String? ??
+            'imported.${DateTime.now().millisecondsSinceEpoch}',
+      });
+      await installPack(pack);
+      return pack;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Unlock multi-orientation after first home frame with a valid size.
   Future<void> unlockOrientationAfterFirstFrame() async {
     if (orientationUnlocked) return;
@@ -668,6 +816,8 @@ class MorphController extends ChangeNotifier {
     systemMorphEnabled = false;
     desktopModeEnabled = true;
     floatingWindowsEnabled = true;
+    packLibrary = [];
+    activePackId = null;
     isCharging = false;
     profileBeforeCharge = null;
     lastMorphReason = null;

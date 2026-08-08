@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
 import '../../widgets/glass_panel.dart';
+import '../ecosystem/morph_store_screen.dart';
 
 /// Quick morph switcher (Launcher OS Control Center analogue).
 Future<void> showMorphControlCenter(
@@ -173,6 +174,32 @@ Future<void> showMorphControlCenter(
                           ),
                           value: c.desktopModeEnabled,
                           onChanged: c.setDesktopModeEnabled,
+                        ),
+                        const SizedBox(height: 4),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.storefront_outlined,
+                              color: p.accentSecondary),
+                          title: Text(
+                            'Morph Store',
+                            style: TextStyle(color: p.ink),
+                          ),
+                          subtitle: Text(
+                            '${c.packLibrary.length} modes installed',
+                            style: TextStyle(color: p.muted, fontSize: 12),
+                          ),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ListenableBuilder(
+                                  listenable: c,
+                                  builder: (_, __) =>
+                                      MorphStoreScreen(controller: c),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),

@@ -7,6 +7,8 @@ import '../../core/morph_controller.dart';
 import '../../core/system_morph_bridge.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
+import '../ecosystem/morph_creator_screen.dart';
+import '../ecosystem/morph_store_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -324,6 +326,54 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ]),
+            _section(c, 'Ecosystem · Phase 5', [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    Icon(Icons.storefront_outlined, color: p.accentSecondary),
+                title: Text('Morph Store', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  '${c.storeCatalog.length} shelf packs · '
+                  '${c.packLibrary.length} installed',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ListenableBuilder(
+                        listenable: c,
+                        builder: (_, __) => MorphStoreScreen(controller: c),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    Icon(Icons.design_services_outlined, color: p.accentSecondary),
+                title: Text('Morph Creator', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Save current look as a shareable mode',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ListenableBuilder(
+                        listenable: c,
+                        builder: (_, __) => MorphCreatorScreen(controller: c),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (c.activePackId != null)
+                Text(
+                  'Active pack: ${c.packById(c.activePackId!)?.name ?? c.activePackId}',
+                  style: TextStyle(color: p.accentSecondary, fontSize: 12),
+                ),
+            ]),
             _section(c, 'Data system', [
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -376,9 +426,9 @@ class SettingsScreen extends StatelessWidget {
             ]),
             _section(c, 'About', [
               Text(
-                'MorphOS 0.4.0 — Phase 2+ System Morph + Phase 4 Desktop.\n'
-                'Accessibility orientation · desktop rail/workspace · floating tasks.\n'
-                'Device apps · time/charge/category · Launcher OS + Rotation refs.\n'
+                'MorphOS 0.5.0 — Phase 5 Ecosystem.\n'
+                'Morph Store · Creator · community morphpack/v1 share.\n'
+                'System morph · desktop · adaptive · device apps.\n'
                 'from ziBashu · gestures: ↓ control · ←→ morph · ↑ apps.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 13),
               ),

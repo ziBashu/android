@@ -13,6 +13,7 @@ import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
 import '../desktop/desktop_shell.dart';
 import '../drawer/app_drawer.dart';
+import '../ecosystem/morph_store_screen.dart';
 import '../morph/control_center.dart';
 import '../morph/morph_hub_screen.dart';
 import '../settings/settings_screen.dart';
@@ -224,6 +225,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _openMorphStore() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ListenableBuilder(
+          listenable: c,
+          builder: (_, __) => MorphStoreScreen(controller: c),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = c.palette;
@@ -311,6 +323,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (c.categoryMorphEnabled) 'Category',
       if (c.systemMorphEnabled) 'System',
       if (c.showDesktopShell) 'Desktop',
+      if (c.activePackId != null) 'Pack',
       if (c.isCharging) '⚡',
     ];
     return Padding(
@@ -379,6 +392,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             visualDensity: VisualDensity.compact,
             onPressed: _openMorphHub,
             icon: Icon(Icons.auto_awesome, color: p.accentSecondary),
+          ),
+          IconButton(
+            tooltip: 'Morph Store',
+            visualDensity: VisualDensity.compact,
+            onPressed: _openMorphStore,
+            icon: Icon(Icons.storefront_outlined, color: p.accentSecondary),
           ),
           IconButton(
             tooltip: 'Settings',

@@ -5,6 +5,8 @@ import '../../core/models.dart';
 import '../../core/morph_controller.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
+import '../ecosystem/morph_creator_screen.dart';
+import '../ecosystem/morph_store_screen.dart';
 
 /// Phase 2 Morph Engine — profiles, per-app rules, environment packs.
 class MorphHubScreen extends StatelessWidget {
@@ -64,9 +66,45 @@ class MorphHubScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     'Packs + per-app rules + gestures. '
-                    'Phase 2+: system orientation via Accessibility when enabled. '
-                    'Phase 4: Desktop Morph uses rail + workspace + floating tasks.',
+                    'Phase 5: Morph Store · Creator · community morphpack/v1 share.',
                     style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ListenableBuilder(
+                                listenable: c,
+                                builder: (_, __) =>
+                                    MorphStoreScreen(controller: c),
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.storefront_outlined, size: 18),
+                        label: const Text('Morph Store'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ListenableBuilder(
+                                listenable: c,
+                                builder: (_, __) =>
+                                    MorphCreatorScreen(controller: c),
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.design_services_outlined, size: 18),
+                        label: const Text('Creator'),
+                      ),
+                    ],
                   ),
                 ],
               ),

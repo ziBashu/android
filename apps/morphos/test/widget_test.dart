@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morphos/core/models.dart';
 import 'package:morphos/core/morph_controller.dart';
+import 'package:morphos/core/morph_pack.dart';
 import 'package:morphos/core/system_morph_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,5 +96,56 @@ void main() {
     ]);
     expect(rules.containsKey('maps'), isFalse);
     expect(rules['com.google.android.apps.maps'], 'landscape');
+  });
+
+  test('Phase5 store catalog and applyPack', () async {
+    final c = MorphController();
+    await c.load();
+    expect(c.storeCatalog, isNotEmpty);
+    final pack = c.storeCatalog.first;
+    await c.applyPack(pack, reason: 'test');
+    expect(c.activePackId, pack.id);
+    expect(c.isPackInstalled(pack.id), isTrue);
+    expect(c.profileId, pack.targetProfile);
+    expect(c.themeId, pack.themeId);
+  });
+
+  test('Phase5 creator + morphpack import export', () async {
+    final c = MorphController();
+    await c.load();
+    await c.setTheme(MorphThemeId.light);
+    final created = await c.createPackFromCurrent(
+      name: 'My Study Mode',
+      description: 'test',
+      tags: ['study'],
+      bindProfile: MorphProfileId.reading,
+    );
+    expect(created.name, 'My Study Mode');
+    expect(c.packLibrary.any((p) => p.id == created.id), isTrue);
+    final json = c.exportPackJson(created);
+    expect(json, contains('morphpack/v1'));
+    await c.uninstallPack(created.id);
+    final imported = await c.importPackJson(json);
+    expect(imported, isNotNull);
+    expect(imported!.name, 'My Study Mode');
+  });
+
+  test('MorphPack fromJson is tolerant', () {
+    final p = MorphPack.fromJson({
+      'format': 'morphpack/v1',
+      'id': 'x',
+      'name': 'X',
+      'author': 'a',
+      'description': 'd',
+      'category': 'mode',
+      'themeId': 'neon',
+      'wallpaperId': 'cyberpunk',
+      'layoutPortrait': 'grid',
+      'layoutLandscape': 'grid',
+      'iconStyle': 'squircle',
+      'targetProfile': 'phone',
+    });
+    expect(p.id, 'x');
+    expect(p.toEnvironment().themeId, MorphThemeId.neon);
   });
 }
