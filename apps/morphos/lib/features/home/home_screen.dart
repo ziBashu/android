@@ -16,6 +16,7 @@ import '../drawer/app_drawer.dart';
 import '../ecosystem/morph_store_screen.dart';
 import '../morph/control_center.dart';
 import '../morph/morph_hub_screen.dart';
+import '../platform/platform_screen.dart';
 import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -54,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       try {
         await c.refreshSystemStatus();
         await c.syncSystemMorph();
+        await c.applyPlatformChrome();
       } catch (_) {}
       try {
         await _catalog.refresh();
@@ -236,6 +238,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _openPlatform() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ListenableBuilder(
+          listenable: c,
+          builder: (_, __) => PlatformScreen(controller: c),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = c.palette;
@@ -324,6 +337,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (c.systemMorphEnabled) 'System',
       if (c.showDesktopShell) 'Desktop',
       if (c.activePackId != null) 'Pack',
+      if (c.platformModeEnabled) 'Platform',
       if (c.isCharging) '⚡',
     ];
     return Padding(
@@ -398,6 +412,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             visualDensity: VisualDensity.compact,
             onPressed: _openMorphStore,
             icon: Icon(Icons.storefront_outlined, color: p.accentSecondary),
+          ),
+          IconButton(
+            tooltip: 'Platform',
+            visualDensity: VisualDensity.compact,
+            onPressed: _openPlatform,
+            icon: Icon(Icons.developer_board, color: p.accentSecondary),
           ),
           IconButton(
             tooltip: 'Settings',

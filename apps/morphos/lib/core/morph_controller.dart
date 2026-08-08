@@ -8,9 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 import 'morph_pack.dart';
 import 'morph_palette.dart';
+import 'platform_chrome.dart';
 import 'system_morph_bridge.dart';
 
-/// Central MorphOS state — Phase 0–5 Morph Engine + ecosystem packs.
+/// Central MorphOS state — Phase 0–6 platform layer + morph engine.
 class MorphController extends ChangeNotifier {
   MorphController();
 
@@ -88,6 +89,12 @@ class MorphController extends ChangeNotifier {
 
   /// Phase 5: last applied store/creator pack id.
   String? activePackId;
+
+  /// Phase 6: platform control plane (immersive chrome, desktop keep-awake, boot pref).
+  bool platformModeEnabled = false;
+  bool immersiveChrome = false;
+  bool keepAwakeDesktop = true;
+  bool bootRestoreEnabled = true;
 
   /// Phase 3 runtime flags (not all persisted).
   bool isCharging = false;
@@ -184,6 +191,10 @@ class MorphController extends ChangeNotifier {
           floatingWindowsEnabled =
               m['floatingWindowsEnabled'] as bool? ?? true;
           activePackId = m['activePackId'] as String?;
+          platformModeEnabled = m['platformModeEnabled'] as bool? ?? false;
+          immersiveChrome = m['immersiveChrome'] as bool? ?? false;
+          keepAwakeDesktop = m['keepAwakeDesktop'] as bool? ?? true;
+          bootRestoreEnabled = m['bootRestoreEnabled'] as bool? ?? true;
 
           final envMap = m['environments'] as Map?;
           if (envMap != null) {
@@ -260,6 +271,8 @@ class MorphController extends ChangeNotifier {
       try {
         await refreshSystemStatus();
         await syncSystemMorph();
+        await applyPlatformChrome();
+        await _syncKeepAwake();
       } catch (_) {}
     });
   }
@@ -305,6 +318,10 @@ class MorphController extends ChangeNotifier {
         'desktopModeEnabled': desktopModeEnabled,
         'floatingWindowsEnabled': floatingWindowsEnabled,
         'activePackId': activePackId,
+        'platformModeEnabled': platformModeEnabled,
+        'immersiveChrome': immersiveChrome,
+        'keepAwakeDesktop': keepAwakeDesktop,
+        'bootRestoreEnabled': bootRestoreEnabled,
         'environments': {
           for (final e in environments.entries) e.key.name: e.value.toJson(),
         },
@@ -388,8 +405,66 @@ class MorphController extends ChangeNotifier {
     if (orientationUnlocked) {
       unawaited(syncSystemMorph());
     }
+    unawaited(applyPlatformChrome());
+    unawaited(_syncKeepAwake());
     if (persist) await _persist();
     notifyListeners();
+  }
+
+  Future<void> setPlatformModeEnabled(bool v) async {
+    platformModeEnabled = v;
+    if (v) {
+      immersiveChrome = true;
+      bootRestoreEnabled = true;
+      // Encourage system morph when platform mode is on.
+      if (!systemMorphEnabled) {
+        systemMorphEnabled = true;
+        systemStatus = await SystemMorphBridge.setSystemMorphEnabled(true);
+      }
+    }
+    await applyPlatformChrome();
+    await _syncKeepAwake();
+    await syncSystemMorph();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setImmersiveChrome(bool v) async {
+    immersiveChrome = v;
+    await applyPlatformChrome();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setKeepAwakeDesktop(bool v) async {
+    keepAwakeDesktop = v;
+    await _syncKeepAwake();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setBootRestoreEnabled(bool v) async {
+    bootRestoreEnabled = v;
+    // Boot receiver always registered; only reapplies when system morph enabled.
+    // Persist preference for UI honesty + future native gate.
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> applyPlatformChrome() async {
+    final immersive = immersiveChrome || platformModeEnabled;
+    await PlatformChrome.apply(
+      palette: palette,
+      immersive: immersive,
+      quietMode: quietMode,
+    );
+  }
+
+  Future<void> _syncKeepAwake() async {
+    final keep = keepAwakeDesktop &&
+        (profileId == MorphProfileId.desktop ||
+            (platformModeEnabled && displayInfo.hasExternalDisplay));
+    await SystemMorphBridge.setKeepScreenOn(keep);
   }
 
   MorphLayoutId layoutForSize(Size size) {
@@ -818,6 +893,10 @@ class MorphController extends ChangeNotifier {
     floatingWindowsEnabled = true;
     packLibrary = [];
     activePackId = null;
+    platformModeEnabled = false;
+    immersiveChrome = false;
+    keepAwakeDesktop = true;
+    bootRestoreEnabled = true;
     isCharging = false;
     profileBeforeCharge = null;
     lastMorphReason = null;

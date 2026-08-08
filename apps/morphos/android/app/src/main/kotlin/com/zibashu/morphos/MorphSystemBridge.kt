@@ -1,5 +1,6 @@
 package com.zibashu.morphos
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
@@ -9,16 +10,23 @@ import android.provider.Settings
 import android.view.Display
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.lang.ref.WeakReference
 
 /**
- * MethodChannel bridge: Flutter ↔ native system morph + desktop display info.
+ * MethodChannel bridge: Flutter ↔ native morph + platform layer.
  * Channel: com.zibashu.morphos/system
  */
-class MorphSystemBridge(private val context: Context) : MethodChannel.MethodCallHandler {
+class MorphSystemBridge(
+    private val context: Context,
+    activity: Activity? = null,
+) : MethodChannel.MethodCallHandler {
+
+    private val activityRef = WeakReference(activity)
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "getStatus" -> result.success(statusMap())
+            "getPlatformInfo" -> result.success(MorphPlatform.platformInfo(context))
             "setSystemMorphEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
                 MorphOrientationStore.setEnabled(context, enabled)
@@ -50,16 +58,7 @@ class MorphSystemBridge(private val context: Context) : MethodChannel.MethodCall
                 result.success(rules.size)
             }
             "openAccessibilitySettings" -> {
-                try {
-                    context.startActivity(
-                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(
-                            Intent.FLAG_ACTIVITY_NEW_TASK,
-                        ),
-                    )
-                    result.success(true)
-                } catch (e: Exception) {
-                    result.error("open", e.message, null)
-                }
+                result.success(openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
             "openWriteSettings" -> {
                 try {
@@ -85,14 +84,58 @@ class MorphSystemBridge(private val context: Context) : MethodChannel.MethodCall
                     result.error("open", e.message, null)
                 }
             }
+            "openHomeSettings" -> result.success(MorphPlatform.openHomeSettings(context))
+            "openBatteryOptimizationSettings" ->
+                result.success(MorphPlatform.openBatteryOptimizationSettings(context))
+            "openAppDetails" -> result.success(MorphPlatform.openAppDetails(context))
+            "requestHomeRole" -> {
+                val act = activityRef.get()
+                if (act != null) {
+                    result.success(MorphPlatform.requestHomeRole(act))
+                } else {
+                    result.success(MorphPlatform.openHomeSettings(context))
+                }
+            }
+            "setKeepScreenOn" -> {
+                val keep = call.argument<Boolean>("keep") ?: false
+                MorphPlatform.setKeepScreenOn(activityRef.get(), keep)
+                result.success(true)
+            }
+            "cycleOrientationMode" -> {
+                val modes = listOf(
+                    "sensor",
+                    "portrait",
+                    "landscape",
+                    "reverseLandscape",
+                )
+                val current = MorphOrientationStore.globalMode(context)
+                val idx = modes.indexOf(current).let { if (it < 0) 0 else it }
+                val next = modes[(idx + 1) % modes.size]
+                MorphOrientationStore.setGlobalMode(context, next)
+                MorphOrientationStore.setEnabled(context, true)
+                MorphOrientationApplier.apply(context, next)
+                result.success(next)
+            }
             "getDisplayInfo" -> result.success(displayInfo())
             else -> result.notImplemented()
+        }
+    }
+
+    private fun openSettings(action: String): Boolean {
+        return try {
+            context.startActivity(
+                Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
     private fun statusMap(): Map<String, Any?> {
         return try {
             val info = displayInfo()
+            val platform = MorphPlatform.platformInfo(context)
             mapOf(
                 "systemMorphEnabled" to MorphOrientationStore.isEnabled(context),
                 "accessibilityRunning" to MorphOrientationService.isRunning(),
@@ -105,6 +148,12 @@ class MorphSystemBridge(private val context: Context) : MethodChannel.MethodCall
                     (MorphOrientationStore.lastMode(context) ?: ""),
                 "displayCount" to (info["displayCount"] ?: 1),
                 "hasExternalDisplay" to (info["hasExternalDisplay"] ?: false),
+                "isDefaultHome" to (platform["isDefaultHome"] ?: false),
+                "ignoringBatteryOptimizations" to
+                    (platform["ignoringBatteryOptimizations"] ?: false),
+                "sdkInt" to (platform["sdkInt"] ?: 0),
+                "manufacturer" to (platform["manufacturer"] ?: ""),
+                "model" to (platform["model"] ?: ""),
             )
         } catch (_: Exception) {
             mapOf(
@@ -117,6 +166,11 @@ class MorphSystemBridge(private val context: Context) : MethodChannel.MethodCall
                 "lastAppliedMode" to "",
                 "displayCount" to 1,
                 "hasExternalDisplay" to false,
+                "isDefaultHome" to false,
+                "ignoringBatteryOptimizations" to false,
+                "sdkInt" to 0,
+                "manufacturer" to "",
+                "model" to "",
             )
         }
     }

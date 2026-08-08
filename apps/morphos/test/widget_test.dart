@@ -148,4 +148,16 @@ void main() {
     expect(p.id, 'x');
     expect(p.toEnvironment().themeId, MorphThemeId.neon);
   });
+
+  test('Phase6 platform mode flags persist defaults', () async {
+    final c = MorphController();
+    await c.load();
+    expect(c.platformModeEnabled, isFalse);
+    expect(c.bootRestoreEnabled, isTrue);
+    expect(c.keepAwakeDesktop, isTrue);
+    await c.setPlatformModeEnabled(true);
+    expect(c.platformModeEnabled, isTrue);
+    expect(c.immersiveChrome, isTrue);
+    expect(c.systemStatus.platformScore, inInclusiveRange(0, 5));
+  });
 }

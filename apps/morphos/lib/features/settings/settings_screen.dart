@@ -9,6 +9,7 @@ import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
 import '../ecosystem/morph_creator_screen.dart';
 import '../ecosystem/morph_store_screen.dart';
+import '../platform/platform_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -326,6 +327,36 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ]),
+            _section(c, 'Platform · Phase 6', [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.developer_board, color: p.accentSecondary),
+                title:
+                    Text('Platform Control', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Home · a11y · battery · QS tile · readiness '
+                  '${c.systemStatus.platformScore}/5'
+                  '${c.platformModeEnabled ? ' · ON' : ''}',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ListenableBuilder(
+                        listenable: c,
+                        builder: (_, __) => PlatformScreen(controller: c),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Platform mode', style: TextStyle(color: p.ink)),
+                value: c.platformModeEnabled,
+                onChanged: c.setPlatformModeEnabled,
+              ),
+            ]),
             _section(c, 'Ecosystem · Phase 5', [
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -426,10 +457,10 @@ class SettingsScreen extends StatelessWidget {
             ]),
             _section(c, 'About', [
               Text(
-                'MorphOS 0.5.0 — Phase 5 Ecosystem.\n'
-                'Morph Store · Creator · community morphpack/v1 share.\n'
-                'System morph · desktop · adaptive · device apps.\n'
-                'from ziBashu · gestures: ↓ control · ←→ morph · ↑ apps.',
+                'MorphOS 0.6.0 — Phase 6 Platform Layer.\n'
+                'Default home · QS tile · boot restore · system chrome.\n'
+                'Store · Creator · desktop · adaptive · system morph.\n'
+                'Custom ROM remains long-term. from ziBashu.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 13),
               ),
             ]),

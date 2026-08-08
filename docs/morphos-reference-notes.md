@@ -111,6 +111,8 @@ How real per-app / forced orientation works in the wild:
 | System-wide orientation | **Yes** — `MorphOrientationService` + WRITE_SETTINGS (consent) |
 | Desktop mode | **Yes** — rail/workspace/floating tasks + external display detect |
 | Morph Store / Creator | **Yes (0.5)** — offline packs + morphpack/v1 community share |
+| Platform layer | **Yes (0.6)** — home role, QS tile, boot restore, chrome, battery |
+| Custom ROM | **Roadmap** — not in Flutter APK; platform control plane only |
 
 ---
 

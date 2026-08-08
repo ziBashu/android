@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'models.dart';
 
-/// Phase 2+ / 4 native bridge — system orientation + display info.
+/// Phase 2+ / 4 / 6 native bridge — system orientation + platform layer.
 class SystemMorphBridge {
   SystemMorphBridge._();
 
@@ -19,6 +19,17 @@ class SystemMorphBridge {
       return SystemMorphStatus.fromMap(raw ?? const {});
     } catch (_) {
       return SystemMorphStatus.unsupported;
+    }
+  }
+
+  static Future<PlatformInfo> getPlatformInfo() async {
+    if (!isAndroid) return PlatformInfo.unsupported;
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('getPlatformInfo');
+      return PlatformInfo.fromMap(raw ?? const {});
+    } catch (_) {
+      return PlatformInfo.unsupported;
     }
   }
 
@@ -40,6 +51,15 @@ class SystemMorphBridge {
     try {
       await _channel.invokeMethod<void>('setGlobalOrientation', {'mode': mode});
     } catch (_) {}
+  }
+
+  static Future<String?> cycleOrientationMode() async {
+    if (!isAndroid) return null;
+    try {
+      return await _channel.invokeMethod<String>('cycleOrientationMode');
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Push package → orientation map derived from [AppMorphRule]s.
@@ -68,6 +88,41 @@ class SystemMorphBridge {
     if (!isAndroid) return;
     try {
       await _channel.invokeMethod<void>('openOverlaySettings');
+    } catch (_) {}
+  }
+
+  static Future<void> openHomeSettings() async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('openHomeSettings');
+    } catch (_) {}
+  }
+
+  static Future<void> openBatteryOptimizationSettings() async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('openBatteryOptimizationSettings');
+    } catch (_) {}
+  }
+
+  static Future<void> openAppDetails() async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('openAppDetails');
+    } catch (_) {}
+  }
+
+  static Future<void> requestHomeRole() async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('requestHomeRole');
+    } catch (_) {}
+  }
+
+  static Future<void> setKeepScreenOn(bool keep) async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('setKeepScreenOn', {'keep': keep});
     } catch (_) {}
   }
 
@@ -121,6 +176,11 @@ class SystemMorphStatus {
     this.lastAppliedMode,
     this.displayCount = 1,
     this.hasExternalDisplay = false,
+    this.isDefaultHome = false,
+    this.ignoringBatteryOptimizations = false,
+    this.sdkInt = 0,
+    this.manufacturer = '',
+    this.model = '',
     this.supported = true,
   });
 
@@ -133,6 +193,11 @@ class SystemMorphStatus {
   final String? lastAppliedMode;
   final int displayCount;
   final bool hasExternalDisplay;
+  final bool isDefaultHome;
+  final bool ignoringBatteryOptimizations;
+  final int sdkInt;
+  final String manufacturer;
+  final String model;
   final bool supported;
 
   static const unsupported = SystemMorphStatus(
@@ -147,6 +212,17 @@ class SystemMorphStatus {
   bool get readyForSystemMorph =>
       supported && accessibilityRunning && canWriteSettings;
 
+  /// Phase 6 readiness score 0–5.
+  int get platformScore {
+    var n = 0;
+    if (isDefaultHome) n++;
+    if (accessibilityRunning) n++;
+    if (canWriteSettings) n++;
+    if (canDrawOverlays) n++;
+    if (ignoringBatteryOptimizations) n++;
+    return n;
+  }
+
   factory SystemMorphStatus.fromMap(Map<String, dynamic> m) {
     return SystemMorphStatus(
       systemMorphEnabled: m['systemMorphEnabled'] as bool? ?? false,
@@ -158,6 +234,65 @@ class SystemMorphStatus {
       lastAppliedMode: m['lastAppliedMode'] as String?,
       displayCount: m['displayCount'] as int? ?? 1,
       hasExternalDisplay: m['hasExternalDisplay'] as bool? ?? false,
+      isDefaultHome: m['isDefaultHome'] as bool? ?? false,
+      ignoringBatteryOptimizations:
+          m['ignoringBatteryOptimizations'] as bool? ?? false,
+      sdkInt: m['sdkInt'] as int? ?? 0,
+      manufacturer: m['manufacturer'] as String? ?? '',
+      model: m['model'] as String? ?? '',
+    );
+  }
+}
+
+class PlatformInfo {
+  const PlatformInfo({
+    required this.sdkInt,
+    required this.release,
+    required this.manufacturer,
+    required this.model,
+    required this.isDefaultHome,
+    required this.ignoringBatteryOptimizations,
+    required this.features,
+    required this.platformLayer,
+    this.versionLabel = '',
+    this.supported = true,
+  });
+
+  final int sdkInt;
+  final String release;
+  final String manufacturer;
+  final String model;
+  final bool isDefaultHome;
+  final bool ignoringBatteryOptimizations;
+  final List<String> features;
+  final String platformLayer;
+  final String versionLabel;
+  final bool supported;
+
+  static const unsupported = PlatformInfo(
+    sdkInt: 0,
+    release: '',
+    manufacturer: '',
+    model: '',
+    isDefaultHome: false,
+    ignoringBatteryOptimizations: false,
+    features: [],
+    platformLayer: 'none',
+    supported: false,
+  );
+
+  factory PlatformInfo.fromMap(Map<String, dynamic> m) {
+    return PlatformInfo(
+      sdkInt: m['sdkInt'] as int? ?? 0,
+      release: '${m['release'] ?? ''}',
+      manufacturer: m['manufacturer'] as String? ?? '',
+      model: m['model'] as String? ?? '',
+      isDefaultHome: m['isDefaultHome'] as bool? ?? false,
+      ignoringBatteryOptimizations:
+          m['ignoringBatteryOptimizations'] as bool? ?? false,
+      features: (m['features'] as List?)?.map((e) => '$e').toList() ?? const [],
+      platformLayer: m['platformLayer'] as String? ?? 'morphos-platform-v1',
+      versionLabel: m['versionLabel'] as String? ?? '',
     );
   }
 }
