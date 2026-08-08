@@ -62,6 +62,22 @@
                      "distribution":  [
                                           "warehub"
                                       ]
+                 },
+                 {
+                     "key":  "morphos",
+                     "slug":  "morphos",
+                     "name":  "MorphOS",
+                     "dir":  "apps/morphos",
+                     "packageId":  "com.zibashu.morphos",
+                     "kind":  "other",
+                     "surface":  "other",
+                     "route":  "/hub",
+                     "blurb":  "Transformable phone interface - adaptive launcher and morph profiles.",
+                     "available":  true,
+                     "accentHex":  "0xFF7C4DFF",
+                     "distribution":  [
+                                          "warehub"
+                                      ]
                  }
              ]
 }

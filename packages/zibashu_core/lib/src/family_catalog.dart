@@ -84,4 +84,14 @@ const List<FamilyApp> kFamilyCatalog = [
     available: true,
     accentHex: 0xFF00E5FF,
   ),
+  FamilyApp(
+    slug: 'morphos',
+    name: 'MorphOS',
+    packageId: 'com.zibashu.morphos',
+    surface: 'other',
+    blurb: 'Transformable phone interface - adaptive launcher and morph profiles.',
+    webRoute: '/hub',
+    available: true,
+    accentHex: 0xFF7C4DFF,
+  ),
 ];

@@ -1,0 +1,532 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'models.dart';
+import 'morph_palette.dart';
+
+/// Central MorphOS state — Phase 0 data + Phase 1 identity + Phase 2 Morph Engine.
+class MorphController extends ChangeNotifier {
+  MorphController();
+
+  static const _prefsKey = 'morphos_state_v2';
+  static const _prefsKeyLegacy = 'morphos_state_v1';
+
+  bool ready = false;
+  bool onboardingDone = false;
+  String setupFocus = 'entertainment';
+
+  /// Manual / auto profile currently applied.
+  MorphProfileId profileId = MorphProfileId.phone;
+
+  /// Live visual state (mirrors active environment; editable in settings).
+  MorphThemeId themeId = MorphThemeId.neon;
+  MorphLayoutId layoutId = MorphLayoutId.grid;
+  IconStyleId iconStyle = IconStyleId.squircle;
+  WallpaperId wallpaperId = WallpaperId.cyberpunk;
+  bool showLabels = true;
+  double iconScale = 1.0;
+  int gridColumns = 4;
+  bool quietMode = false;
+  bool largeTargets = false;
+
+  Map<String, String> renames = {};
+  List<String> dockIds = const [
+    'browser',
+    'messages',
+    'music',
+    'camera',
+    'settings',
+  ];
+  List<String> homeIds = const [
+    'browser',
+    'music',
+    'notes',
+    'maps',
+    'gallery',
+    'mail',
+    'clock',
+    'store',
+  ];
+
+  /// Phase 2: environment packs keyed by profile.
+  final Map<MorphProfileId, MorphEnvironment> environments = {
+    for (final p in MorphProfileId.values) p: MorphEnvironment.defaultsFor(p),
+  };
+
+  /// Phase 2: per-app morph rules.
+  List<AppMorphRule> appRules = kDefaultAppMorphRules();
+
+  /// Phase 2: time-based auto morph (off by default).
+  bool timeBasedMorph = false;
+
+  /// Phase 2: apply per-app rules when opening apps.
+  bool perAppMorphEnabled = true;
+
+  /// Phase 3: charging → Desktop Morph (dock mode).
+  bool chargeMorphEnabled = true;
+
+  /// Phase 3: use category heuristics for real packages without explicit rules.
+  bool categoryMorphEnabled = true;
+
+  /// Phase 3 runtime flags (not all persisted).
+  bool isCharging = false;
+  MorphProfileId? profileBeforeCharge;
+
+  /// Phase 2: last transition label for UI.
+  String? lastMorphReason;
+
+  /// Transition tick for AnimatedSwitcher / overlays.
+  int morphGeneration = 0;
+
+  MorphPalette get palette => MorphPalette.forTheme(themeId);
+
+  MorphEnvironment get activeEnvironment =>
+      environments[profileId] ?? MorphEnvironment.defaultsFor(profileId);
+
+  String labelFor(MorphAppItem app) => renames[app.id] ?? app.label;
+
+  MorphAppItem? appById(String id) {
+    for (final a in kDemoApps) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    var raw = prefs.getString(_prefsKey);
+    raw ??= prefs.getString(_prefsKeyLegacy);
+    if (raw != null) {
+      try {
+        final m = jsonDecode(raw) as Map<String, dynamic>;
+        onboardingDone = m['onboardingDone'] as bool? ?? false;
+        setupFocus = m['setupFocus'] as String? ?? 'entertainment';
+        profileId = MorphProfileId.values.byName(
+          m['profileId'] as String? ?? MorphProfileId.phone.name,
+        );
+        themeId = MorphThemeId.values.byName(
+          m['themeId'] as String? ?? MorphThemeId.neon.name,
+        );
+        layoutId = MorphLayoutId.values.byName(
+          m['layoutId'] as String? ?? MorphLayoutId.grid.name,
+        );
+        iconStyle = IconStyleId.values.byName(
+          m['iconStyle'] as String? ?? IconStyleId.squircle.name,
+        );
+        wallpaperId = WallpaperId.values.byName(
+          m['wallpaperId'] as String? ?? WallpaperId.cyberpunk.name,
+        );
+        showLabels = m['showLabels'] as bool? ?? true;
+        iconScale = (m['iconScale'] as num?)?.toDouble() ?? 1.0;
+        gridColumns = m['gridColumns'] as int? ?? 4;
+        quietMode = m['quietMode'] as bool? ?? false;
+        largeTargets = m['largeTargets'] as bool? ?? false;
+        renames = Map<String, String>.from(
+          (m['renames'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? {},
+        );
+        dockIds = List<String>.from(m['dockIds'] as List? ?? dockIds);
+        homeIds = List<String>.from(m['homeIds'] as List? ?? homeIds);
+        timeBasedMorph = m['timeBasedMorph'] as bool? ?? false;
+        perAppMorphEnabled = m['perAppMorphEnabled'] as bool? ?? true;
+        chargeMorphEnabled = m['chargeMorphEnabled'] as bool? ?? true;
+        categoryMorphEnabled = m['categoryMorphEnabled'] as bool? ?? true;
+
+        final envMap = m['environments'] as Map?;
+        if (envMap != null) {
+          for (final e in envMap.entries) {
+            final pid = MorphProfileId.values.byName(e.key as String);
+            environments[pid] = MorphEnvironment.fromJson(
+              Map<String, dynamic>.from(e.value as Map),
+            );
+          }
+        }
+
+        final rules = m['appRules'] as List?;
+        if (rules != null) {
+          appRules = rules
+              .map((e) => AppMorphRule.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList();
+        }
+      } catch (_) {
+        // Corrupt prefs — keep defaults.
+      }
+    }
+
+    if (timeBasedMorph) {
+      await _applyTimeBasedMorph(reason: 'time schedule on load', persist: false);
+    }
+
+    ready = true;
+    // Orientation applied after first home frame (avoids width=0 relaunch).
+    await applyOrientation(force: false);
+    notifyListeners();
+  }
+
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, exportJson());
+  }
+
+  Map<String, dynamic> _stateMap() => {
+        'onboardingDone': onboardingDone,
+        'setupFocus': setupFocus,
+        'profileId': profileId.name,
+        'themeId': themeId.name,
+        'layoutId': layoutId.name,
+        'iconStyle': iconStyle.name,
+        'wallpaperId': wallpaperId.name,
+        'showLabels': showLabels,
+        'iconScale': iconScale,
+        'gridColumns': gridColumns,
+        'quietMode': quietMode,
+        'largeTargets': largeTargets,
+        'renames': renames,
+        'dockIds': dockIds,
+        'homeIds': homeIds,
+        'timeBasedMorph': timeBasedMorph,
+        'perAppMorphEnabled': perAppMorphEnabled,
+        'chargeMorphEnabled': chargeMorphEnabled,
+        'categoryMorphEnabled': categoryMorphEnabled,
+        'environments': {
+          for (final e in environments.entries) e.key.name: e.value.toJson(),
+        },
+        'appRules': appRules.map((r) => r.toJson()).toList(),
+      };
+
+  Future<void> completeOnboarding(String focus) async {
+    setupFocus = focus;
+    onboardingDone = true;
+    final MorphProfileId seed = switch (focus) {
+      'gaming' => MorphProfileId.gaming,
+      'productivity' => MorphProfileId.work,
+      'minimal' => MorphProfileId.phone,
+      'creative' => MorphProfileId.desktop,
+      _ => MorphProfileId.phone,
+    };
+    // Reset environments to defaults then apply seed.
+    for (final p in MorphProfileId.values) {
+      environments[p] = MorphEnvironment.defaultsFor(p);
+    }
+    if (focus == 'minimal') {
+      environments[MorphProfileId.phone] =
+          MorphEnvironment.defaultsFor(MorphProfileId.phone).copyWith(
+        themeId: MorphThemeId.dark,
+        wallpaperId: WallpaperId.voidBlack,
+        layoutPortrait: MorphLayoutId.minimal,
+      );
+    }
+    await applyProfile(seed, reason: 'onboarding:$focus');
+  }
+
+  /// Apply a full morph profile environment (Phase 2 heart).
+  Future<void> applyProfile(
+    MorphProfileId id, {
+    String reason = 'manual',
+    bool persist = true,
+  }) async {
+    profileId = id;
+    final env = environments[id] ?? MorphEnvironment.defaultsFor(id);
+    themeId = env.themeId;
+    wallpaperId = env.wallpaperId;
+    iconStyle = env.iconStyle;
+    showLabels = env.showLabels;
+    iconScale = env.iconScale;
+    gridColumns = env.gridColumns;
+    dockIds = List<String>.from(env.dockIds);
+    homeIds = List<String>.from(env.homeIds);
+    quietMode = env.quietMode;
+    largeTargets = env.largeTargets;
+    // Layout resolved live via [layoutForSize]; seed portrait default.
+    layoutId = env.layoutPortrait;
+    lastMorphReason = reason;
+    morphGeneration++;
+    await applyOrientation(force: onboardingDone);
+    if (persist) await _persist();
+    notifyListeners();
+  }
+
+  MorphLayoutId layoutForSize(Size size) {
+    final env = activeEnvironment;
+    final landscape = size.width > size.height;
+    return env.layoutFor(landscape: landscape);
+  }
+
+  Future<void> cycleProfile({int delta = 1}) async {
+    final values = MorphProfileId.values;
+    final i = values.indexOf(profileId);
+    final next = values[(i + delta) % values.length];
+    await applyProfile(next, reason: delta > 0 ? 'gesture:next' : 'gesture:prev');
+  }
+
+  Future<void> setProfile(MorphProfileId id) =>
+      applyProfile(id, reason: 'manual');
+
+  /// Opening an app may switch morph (Phase 2 rules + Phase 3 category).
+  Future<MorphProfileId?> morphForAppLaunch(
+    String appId, {
+    MorphAppItem? app,
+  }) async {
+    if (!perAppMorphEnabled) return null;
+
+    // Explicit rules first (id or package).
+    for (final r in appRules) {
+      if (!r.enabled) continue;
+      if (r.appId == appId ||
+          (app?.packageName != null && r.appId == app!.packageName)) {
+        if (r.profileId != profileId) {
+          await applyProfile(
+            r.profileId,
+            reason: 'app-rule:${app?.label ?? appId}',
+          );
+        }
+        return r.profileId;
+      }
+    }
+
+    // Category heuristics for real / demo apps.
+    if (categoryMorphEnabled) {
+      final cat = app?.category ??
+          inferAppCategory(name: app?.label ?? appId, packageName: appId);
+      final next = profileForCategory(cat);
+      if (next != null && next != profileId) {
+        await applyProfile(
+          next,
+          reason: 'adaptive:category $cat → ${next.label}',
+        );
+        return next;
+      }
+    }
+    return null;
+  }
+
+  Future<void> setChargeMorphEnabled(bool v) async {
+    chargeMorphEnabled = v;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setCategoryMorphEnabled(bool v) async {
+    categoryMorphEnabled = v;
+    await _persist();
+    notifyListeners();
+  }
+
+  void notifyAdaptiveOnly() => notifyListeners();
+
+  Future<void> setAppRule(AppMorphRule rule) async {
+    appRules = [
+      ...appRules.where((r) => r.appId != rule.appId),
+      rule,
+    ];
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> removeAppRule(String appId) async {
+    appRules = appRules.where((r) => r.appId != appId).toList();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setPerAppMorphEnabled(bool v) async {
+    perAppMorphEnabled = v;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setTimeBasedMorph(bool v) async {
+    timeBasedMorph = v;
+    if (v) {
+      await _applyTimeBasedMorph(reason: 'time schedule enabled');
+    } else {
+      await _persist();
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshTimeBasedMorph() async {
+    if (!timeBasedMorph) return;
+    await _applyTimeBasedMorph(reason: 'time schedule tick');
+  }
+
+  Future<void> _applyTimeBasedMorph({
+    required String reason,
+    bool persist = true,
+  }) async {
+    final hour = DateTime.now().hour;
+    final MorphProfileId next;
+    if (hour >= 6 && hour < 12) {
+      next = MorphProfileId.work;
+    } else if (hour >= 12 && hour < 18) {
+      next = MorphProfileId.phone;
+    } else if (hour >= 18 && hour < 22) {
+      next = MorphProfileId.relax;
+    } else {
+      next = MorphProfileId.reading;
+    }
+    if (next != profileId) {
+      await applyProfile(next, reason: reason, persist: persist);
+    } else if (persist) {
+      await _persist();
+      notifyListeners();
+    }
+  }
+
+  /// Save current visuals into the active profile pack.
+  Future<void> saveCurrentIntoActiveEnvironment() async {
+    final cur = activeEnvironment;
+    environments[profileId] = cur.copyWith(
+      themeId: themeId,
+      wallpaperId: wallpaperId,
+      layoutPortrait: layoutId,
+      // Keep landscape unless cards/desktop force.
+      layoutLandscape: cur.layoutLandscape,
+      iconStyle: iconStyle,
+      showLabels: showLabels,
+      iconScale: iconScale,
+      gridColumns: gridColumns,
+      dockIds: List<String>.from(dockIds),
+      homeIds: List<String>.from(homeIds),
+      quietMode: quietMode,
+      largeTargets: largeTargets,
+    );
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> updateEnvironment(MorphEnvironment env) async {
+    environments[env.profileId] = env;
+    if (env.profileId == profileId) {
+      await applyProfile(env.profileId, reason: 'env edit');
+    } else {
+      await _persist();
+      notifyListeners();
+    }
+  }
+
+  Future<void> setTheme(MorphThemeId id) async {
+    themeId = id;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setLayout(MorphLayoutId id) async {
+    layoutId = id;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setIconStyle(IconStyleId id) async {
+    iconStyle = id;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setWallpaper(WallpaperId id) async {
+    wallpaperId = id;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setShowLabels(bool v) async {
+    showLabels = v;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setIconScale(double v) async {
+    iconScale = v.clamp(0.75, 1.4);
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setGridColumns(int v) async {
+    gridColumns = v.clamp(3, 6);
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> renameApp(String id, String name) async {
+    final t = name.trim();
+    if (t.isEmpty) {
+      renames.remove(id);
+    } else {
+      renames[id] = t;
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Apply orientation for active morph. Call after first frame when possible.
+  /// Keeps portrait-only until user leaves onboarding (avoids zero-size relaunch).
+  Future<void> applyOrientation({bool force = false}) async {
+    if (!force && !onboardingDone) {
+      try {
+        await SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.portraitUp,
+        ]);
+      } catch (_) {}
+      return;
+    }
+    try {
+      await SystemChrome.setPreferredOrientations(profileId.orientations);
+    } catch (_) {
+      // Ignore in unit tests / headless environments.
+    }
+  }
+
+  Future<void> resetAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
+    await prefs.remove(_prefsKeyLegacy);
+    onboardingDone = false;
+    setupFocus = 'entertainment';
+    profileId = MorphProfileId.phone;
+    for (final p in MorphProfileId.values) {
+      environments[p] = MorphEnvironment.defaultsFor(p);
+    }
+    appRules = kDefaultAppMorphRules();
+    timeBasedMorph = false;
+    perAppMorphEnabled = true;
+    chargeMorphEnabled = true;
+    categoryMorphEnabled = true;
+    isCharging = false;
+    profileBeforeCharge = null;
+    lastMorphReason = null;
+    morphGeneration = 0;
+    final env = MorphEnvironment.defaultsFor(MorphProfileId.phone);
+    themeId = env.themeId;
+    layoutId = env.layoutPortrait;
+    iconStyle = env.iconStyle;
+    wallpaperId = env.wallpaperId;
+    showLabels = env.showLabels;
+    iconScale = env.iconScale;
+    gridColumns = env.gridColumns;
+    quietMode = env.quietMode;
+    largeTargets = env.largeTargets;
+    renames = {};
+    dockIds = List<String>.from(env.dockIds);
+    homeIds = List<String>.from(env.homeIds);
+    await applyOrientation();
+    notifyListeners();
+  }
+
+  String exportJson() =>
+      const JsonEncoder.withIndent('  ').convert(_stateMap());
+
+  Future<bool> importJson(String raw) async {
+    try {
+      jsonDecode(raw); // validate JSON before overwriting prefs
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey, raw);
+      ready = false;
+      await load();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}

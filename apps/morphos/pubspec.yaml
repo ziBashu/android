@@ -1,0 +1,27 @@
+name: morphos
+description: MorphOS — transformable phone interface; adaptive launcher and morph profiles.
+publish_to: none
+version: 0.3.0+3
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.3.0
+  installed_apps: ^1.5.2
+  battery_plus: ^6.0.0
+  zibashu_core:
+    path: ../../packages/zibashu_core
+  zibashu_ui:
+    path: ../../packages/zibashu_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
