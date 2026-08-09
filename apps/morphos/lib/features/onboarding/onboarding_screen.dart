@@ -67,9 +67,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'A personal adaptive environment.\n'
+                'Your adaptive home launcher.\n'
                 'Android gives apps — MorphOS gives environments.\n'
-                'Your phone is not always a phone.',
+                'After setup, set MorphOS as default Home for a full-phone experience.',
                 style: TextStyle(color: p.muted, height: 1.4, fontSize: 15),
               ),
               const SizedBox(height: 10),

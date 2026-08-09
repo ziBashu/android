@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_search.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
 import '../../widgets/app_icon_tile.dart';
@@ -36,13 +37,12 @@ class _AppDrawerSheetState extends State<AppDrawerSheet> {
   Widget build(BuildContext context) {
     final c = widget.controller;
     final p = c.palette;
-    final filtered = widget.apps.where((a) {
-      final name = c.labelFor(a).toLowerCase();
-      final pkg = (a.packageName ?? '').toLowerCase();
-      final q = _q.toLowerCase();
-      return name.contains(q) || pkg.contains(q);
-    }).toList()
-      ..sort((a, b) => c.labelFor(a).compareTo(c.labelFor(b)));
+    // Ranked search: label-first (Brave beats package noise).
+    final filtered = AppSearch.rank(
+      widget.apps,
+      _q,
+      labelOf: c.labelFor,
+    );
 
     final maxH = MediaQuery.sizeOf(context).height * 0.88;
 

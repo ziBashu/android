@@ -1,7 +1,7 @@
 name: morphos
 description: MorphOS — personal adaptive environment layer; shapes, spaces, intelligence, morph packs.
 publish_to: none
-version: 0.7.1+10
+version: 1.0.0+11
 
 environment:
   sdk: ^3.5.0
@@ -13,6 +13,8 @@ dependencies:
   shared_preferences: ^2.3.0
   installed_apps: ^1.5.2
   battery_plus: ^6.0.0
+  image_picker: ^1.1.2
+  image: ^4.3.0
   zibashu_core:
     path: ../../packages/zibashu_core
   zibashu_ui:

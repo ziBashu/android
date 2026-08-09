@@ -1,8 +1,15 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+import 'package:morphos/core/app_search.dart';
+import 'package:morphos/core/image_customize.dart';
 import 'package:morphos/core/models.dart';
 import 'package:morphos/core/morph_controller.dart';
 import 'package:morphos/core/morph_pack.dart';
+import 'package:morphos/core/productivity.dart';
 import 'package:morphos/core/system_morph_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -265,5 +272,175 @@ void main() {
       globalOrientation: 'landscape',
     );
     expect(ready.readyForSystemMorph, isTrue);
+  });
+
+  // ── MorphOS 1.0.0: ranked search, productivity, customization ──
+
+  test('Ranked app search: brave surfaces Brave label first', () {
+    const brave = MorphAppItem(
+      id: 'com.brave.browser',
+      label: 'Brave',
+      icon: Icons.public,
+      packageName: 'com.brave.browser',
+      isSystemDemo: false,
+    );
+    const chrome = MorphAppItem(
+      id: 'com.android.chrome',
+      label: 'Chrome',
+      icon: Icons.public,
+      packageName: 'com.android.chrome',
+      isSystemDemo: false,
+    );
+    const other = MorphAppItem(
+      id: 'com.example.bravado',
+      label: 'Bravado Notes',
+      icon: Icons.note,
+      packageName: 'com.example.bravado',
+      isSystemDemo: false,
+    );
+    const noise = MorphAppItem(
+      id: 'com.noise.pkgbravehelper',
+      label: 'System Helper',
+      icon: Icons.settings,
+      packageName: 'com.noise.pkgbravehelper',
+      isSystemDemo: false,
+    );
+
+    final ranked = AppSearch.rank(
+      [chrome, other, noise, brave],
+      'brave',
+    );
+    expect(ranked, isNotEmpty);
+    expect(ranked.first.label, 'Brave');
+    expect(ranked.first.packageName, 'com.brave.browser');
+    // Label match beats package-only noise
+    expect(AppSearch.scoreApp(brave, 'brave'),
+        greaterThan(AppSearch.scoreApp(noise, 'brave')));
+  });
+
+  test('Ranked search: empty query sorts A-Z by label', () {
+    const a = MorphAppItem(id: 'z', label: 'Zulu', icon: Icons.abc);
+    const b = MorphAppItem(id: 'a', label: 'Alpha', icon: Icons.abc);
+    final ranked = AppSearch.rank([a, b], '');
+    expect(ranked.first.label, 'Alpha');
+  });
+
+  test('BatterySnapshot mapping from raw plugin inputs', () {
+    final charged = BatterySnapshot.fromRaw(level: 88, charging: true);
+    expect(charged.level, 88);
+    expect(charged.charging, isTrue);
+    expect(charged.label, '⚡ 88%');
+    expect(charged.iconKey, 'charging');
+
+    final low = BatterySnapshot.fromRaw(level: 12, charging: false);
+    expect(low.isLow, isTrue);
+    expect(low.label, '12%');
+    expect(low.iconKey, 'alert');
+
+    final fromState = BatterySnapshot.fromRaw(
+      level: 50,
+      stateName: 'charging',
+    );
+    expect(fromState.charging, isTrue);
+
+    final unknown = BatterySnapshot.fromRaw(stateName: 'unknown');
+    expect(unknown.unknown, isTrue);
+  });
+
+  test('RotationAction cycles and maps modes', () {
+    expect(RotationAction.sensor.next, RotationAction.portrait);
+    expect(RotationAction.portrait.next, RotationAction.landscape);
+    expect(RotationAction.landscape.next, RotationAction.reverseLandscape);
+    expect(RotationAction.reverseLandscape.next, RotationAction.sensor);
+    expect(RotationActionX.fromMode('landscape'), RotationAction.landscape);
+    expect(RotationAction.portrait.mode, 'portrait');
+    expect(RotationAction.sensor.shortLabel, 'AUTO');
+  });
+
+  test('Customization: icon override + dual wallpaper + icon scale persist',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final c = MorphController();
+    await c.load();
+
+    // Icon override from “cropped” payload
+    final iconBytes = List<int>.generate(64, (i) => i % 256);
+    await c.setAppIconOverride('com.brave.browser', iconBytes);
+    expect(c.iconOverridesB64.containsKey('com.brave.browser'), isTrue);
+
+    // Dual wallpapers
+    final portrait = List<int>.generate(120, (i) => (i * 3) % 256);
+    final landscape = List<int>.generate(140, (i) => (i * 7) % 256);
+    await c.setCustomWallpapers(
+      portraitBytes: portrait,
+      landscapeBytes: landscape,
+    );
+    expect(c.customWallpaperPortraitBytes, portrait);
+    expect(c.customWallpaperLandscapeBytes, landscape);
+    expect(c.customWallpaperFor(landscape: false), portrait);
+    expect(c.customWallpaperFor(landscape: true), landscape);
+
+    // Icon size + grid columns
+    await c.setIconScale(1.25);
+    await c.setGridColumns(5);
+    expect(c.iconScale, 1.25);
+    expect(c.gridColumns, 5);
+
+    // Reload from prefs — real persistence path
+    final c2 = MorphController();
+    await c2.load();
+    expect(c2.iconOverridesB64['com.brave.browser'], isNotNull);
+    expect(base64Decode(c2.iconOverridesB64['com.brave.browser']!), iconBytes);
+    expect(c2.customWallpaperPortraitBytes, portrait);
+    expect(c2.customWallpaperLandscapeBytes, landscape);
+    expect(c2.iconScale, 1.25);
+    expect(c2.gridColumns, 5);
+
+    final decorated = c2.displayApp(const MorphAppItem(
+      id: 'com.brave.browser',
+      label: 'Brave',
+      icon: Icons.public,
+      packageName: 'com.brave.browser',
+    ));
+    expect(decorated.iconBytes, iconBytes);
+  });
+
+  test('ImageCustomize center-crops square icon from non-square image', () {
+    // Build a 40x20 red image, crop to square, resize.
+    final src = img.Image(width: 40, height: 20);
+    img.fill(src, color: img.ColorRgb8(200, 40, 40));
+    final png = img.encodePng(src);
+    final out = ImageCustomize.cropIconSquare(png, maxSize: 16);
+    expect(out, isNotNull);
+    final decoded = img.decodeImage(out!);
+    expect(decoded, isNotNull);
+    expect(decoded!.width, decoded.height);
+    expect(decoded.width, lessThanOrEqualTo(16));
+    expect(ImageCustomize.isReasonableIconPayload(out), isTrue);
+  });
+
+  test('ImageCustomize prepares wallpaper under size budget', () {
+    final src = img.Image(width: 80, height: 120);
+    img.fill(src, color: img.ColorRgb8(20, 80, 180));
+    final png = Uint8List.fromList(img.encodePng(src));
+    final out = ImageCustomize.prepareWallpaper(png, maxLongEdge: 64);
+    expect(out, isNotNull);
+    expect(ImageCustomize.isReasonableWallpaperPayload(out!), isTrue);
+    final decoded = img.decodeImage(out);
+    expect(decoded, isNotNull);
+    final long =
+        decoded!.width > decoded.height ? decoded.width : decoded.height;
+    expect(long, lessThanOrEqualTo(64));
+  });
+
+  test('Launcher setup dismiss flag persists', () async {
+    final c = MorphController();
+    await c.load();
+    expect(c.launcherSetupDismissed, isFalse);
+    await c.dismissLauncherSetup();
+    expect(c.launcherSetupDismissed, isTrue);
+    final c2 = MorphController();
+    await c2.load();
+    expect(c2.launcherSetupDismissed, isTrue);
   });
 }

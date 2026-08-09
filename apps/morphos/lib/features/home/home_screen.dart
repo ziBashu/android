@@ -1,19 +1,28 @@
+import 'dart:async';
 import 'dart:ui' show PointerDeviceKind;
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
 
 import '../../core/adaptive_engine.dart';
 import '../../core/app_catalog.dart';
+import '../../core/image_customize.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
+import '../../core/productivity.dart';
+import '../../core/system_morph_bridge.dart';
 import '../../widgets/app_icon_tile.dart';
 import '../../widgets/glass_panel.dart';
+import '../../widgets/launcher_setup_banner.dart';
 import '../../widgets/morph_background.dart';
+import '../../widgets/productivity_strip.dart';
 import '../connection/phone_connection_screen.dart';
 import '../desktop/desktop_shell.dart';
 import '../drawer/app_drawer.dart';
+import '../drawer/app_search_sheet.dart';
 import '../ecosystem/morph_store_screen.dart';
 import '../morph/control_center.dart';
 import '../morph/morph_hub_screen.dart';
@@ -33,7 +42,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   MorphController get c => widget.controller;
   final AppCatalog _catalog = AppCatalog();
   late final AdaptiveEngine _adaptive = AdaptiveEngine(c);
+  final Battery _battery = Battery();
   bool _catalogReady = false;
+  BatterySnapshot _batterySnap = const BatterySnapshot(
+    level: -1,
+    charging: false,
+    unknown: true,
+  );
+  RotationAction _rotation = RotationAction.sensor;
+  Timer? _batteryTimer;
+  StreamSubscription<BatteryState>? _battSub;
 
   @override
   void initState() {
@@ -64,6 +82,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       try {
         await _adaptive.start();
       } catch (_) {}
+      await _refreshBattery();
+      _syncRotationFromStatus();
+      try {
+        _battSub = _battery.onBatteryStateChanged.listen((_) {
+          unawaited(_refreshBattery());
+        });
+      } catch (_) {}
+      _batteryTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+        unawaited(_refreshBattery());
+      });
       if (mounted) setState(() => _catalogReady = true);
     });
   }
@@ -72,6 +100,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_onKey);
+    _batteryTimer?.cancel();
+    unawaited(_battSub?.cancel() ?? Future<void>.value());
     _adaptive.stop();
     super.dispose();
   }
@@ -79,9 +109,92 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      c.refreshSystemStatus();
+      c.refreshSystemStatus().then((_) {
+        if (mounted) {
+          _syncRotationFromStatus();
+          setState(() {});
+        }
+      });
       c.syncSystemMorph();
+      unawaited(_refreshBattery());
     }
+  }
+
+  Future<void> _refreshBattery() async {
+    try {
+      final level = await _battery.batteryLevel;
+      final state = await _battery.batteryState;
+      final snap = BatterySnapshot.fromRaw(
+        level: level,
+        charging: state == BatteryState.charging || state == BatteryState.full,
+        stateName: state.name,
+      );
+      if (mounted) setState(() => _batterySnap = snap);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _batterySnap = BatterySnapshot.fromRaw(
+            charging: c.isCharging,
+            stateName: c.isCharging ? 'charging' : null,
+          );
+        });
+      }
+    }
+  }
+
+  void _syncRotationFromStatus() {
+    _rotation =
+        RotationActionX.fromMode(c.systemStatus.globalOrientation);
+  }
+
+  Future<void> _cycleRotation() async {
+    final next = _rotation.next;
+    setState(() => _rotation = next);
+    try {
+      final ok = await SystemMorphBridge.applyGlobalOrientationNow(next.mode);
+      if (!mounted) return;
+      await c.refreshSystemStatus();
+      if (!mounted) return;
+      _syncRotationFromStatus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Rotation → ${next.label}'
+                : 'Rotation set in MorphOS · grant system settings for device-wide',
+          ),
+          duration: const Duration(milliseconds: 1200),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      setState(() {});
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Rotation → ${next.label} (local)'),
+          duration: const Duration(milliseconds: 1000),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openQuickSearch() async {
+    await showAppSearchSheet(
+      context: context,
+      controller: c,
+      apps: _allApps,
+      onOpenApp: _launchApp,
+      onLongPress: _renameApp,
+    );
+  }
+
+  Future<void> _requestHomeRole() async {
+    await SystemMorphBridge.requestHomeRole();
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    await c.refreshSystemStatus();
+    if (mounted) setState(() {});
   }
 
   bool _onKey(KeyEvent event) {
@@ -216,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _renameApp(MorphAppItem app) async {
-    // Full edit sheet: rename + load phone icon (MorphOS-only, not OS rename).
+    // Full edit sheet: rename + custom icon from picture (crop square).
     final raw = _catalog.byId(app.id) ?? app;
     final nameCtrl = TextEditingController(text: c.labelFor(raw));
     final p = c.palette;
@@ -249,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 4),
               Text(
-                'Changes stay in MorphOS (name + icon). Does not modify Android’s app list.',
+                'Name + icon stay in MorphOS. Cut a square icon from any photo.',
                 style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
               ),
               const SizedBox(height: 12),
@@ -275,6 +388,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       if (mounted) setState(() {});
                     },
                     child: const Text('Save name'),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () async {
+                      final ok = await _pickCustomIcon(raw.id);
+                      if (ok && ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Icon from photo'),
                   ),
                   OutlinedButton(
                     onPressed: () async {
@@ -304,6 +425,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       },
     );
+  }
+
+  Future<bool> _pickCustomIcon(String appId) async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 92,
+      );
+      if (file == null) return false;
+      final raw = await file.readAsBytes();
+      final cropped = ImageCustomize.cropIconSquare(raw, maxSize: 192);
+      if (cropped == null || !ImageCustomize.isReasonableIconPayload(cropped)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not crop that image')),
+          );
+        }
+        return false;
+      }
+      await c.setAppIconOverride(appId, cropped);
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Icon pick unavailable: $e')),
+        );
+      }
+      return false;
+    }
   }
 
   void _openPhoneConnection() {
@@ -375,12 +528,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final useDesktop = c.showDesktopShell || layout == MorphLayoutId.desktop;
 
+    final showLauncherCta =
+        !c.launcherSetupDismissed && !c.systemStatus.isDefaultHome;
+
     return Scaffold(
       // Opaque fallback so a failed child never shows pure black emptiness.
       backgroundColor: p.scaffoldTint,
       body: MorphBackground(
         wallpaperId: c.wallpaperId,
         palette: p,
+        customPortraitBytes: c.customWallpaperPortraitBytes,
+        customLandscapeBytes: c.customWallpaperLandscapeBytes,
         child: Listener(
           onPointerHover: (_) => c.setPointerConnected(true),
           onPointerDown: (e) {
@@ -414,6 +572,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ? Column(
                       children: [
                         _buildHeader(p, time, MorphLayoutId.desktop),
+                        if (showLauncherCta)
+                          LauncherSetupBanner(
+                            palette: p,
+                            isDefaultHome: c.systemStatus.isDefaultHome,
+                            onSetHome: _requestHomeRole,
+                            onDismiss: () => c.dismissLauncherSetup(),
+                          ),
+                        ProductivityStrip(
+                          palette: p,
+                          battery: _batterySnap,
+                          rotation: _rotation,
+                          onSearch: _openQuickSearch,
+                          onCycleRotation: _cycleRotation,
+                        ),
                         if (!_catalogReady)
                           const LinearProgressIndicator(minHeight: 2),
                         Expanded(
@@ -431,6 +603,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   : Column(
                       children: [
                         _buildHeader(p, time, layout),
+                        if (showLauncherCta)
+                          LauncherSetupBanner(
+                            palette: p,
+                            isDefaultHome: c.systemStatus.isDefaultHome,
+                            onSetHome: _requestHomeRole,
+                            onDismiss: () => c.dismissLauncherSetup(),
+                          ),
+                        ProductivityStrip(
+                          palette: p,
+                          battery: _batterySnap,
+                          rotation: _rotation,
+                          onSearch: _openQuickSearch,
+                          onCycleRotation: _cycleRotation,
+                        ),
                         if (!_catalogReady)
                           const LinearProgressIndicator(minHeight: 2),
                         Expanded(child: _buildLayout(layout)),
@@ -480,7 +666,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 2),
                 Text(
                   '${c.profileId.label} · ${layout.label}'
-                  '${c.quietMode ? ' · Quiet' : ''}',
+                  '${c.quietMode ? ' · Quiet' : ''}'
+                  '${c.systemStatus.isDefaultHome ? ' · Home' : ''}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -495,9 +682,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Text(
                   [
                     if (_catalog.usingDeviceApps)
-                      '${_allApps.length} device apps'
+                      '${_allApps.length} apps'
                     else
-                      'Demo apps',
+                      'Demo catalog',
                     if (adaptiveBits.isNotEmpty)
                       'Adaptive: ${adaptiveBits.join(' · ')}',
                     if (c.lastMorphReason != null) c.lastMorphReason!,
@@ -602,7 +789,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'MorphOS',
+                  c.profileId.label,
                   style: TextStyle(
                     color: c.palette.ink,
                     fontSize: 28,
@@ -611,7 +798,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Phase 4 Desktop · system morph · swipe ↓ control · ←→ morph',
+                  'Swipe ↓ control · ↑ apps · ←→ morph · search in strip',
                   style: TextStyle(color: c.palette.muted),
                   textAlign: TextAlign.center,
                 ),

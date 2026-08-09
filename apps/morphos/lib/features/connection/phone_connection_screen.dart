@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
 
 import '../../core/app_catalog.dart';
+import '../../core/image_customize.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
 import '../../core/system_morph_bridge.dart';
@@ -206,6 +208,33 @@ class _PhoneConnectionScreenState extends State<PhoneConnectionScreen>
                     icon: const Icon(Icons.drive_file_rename_outline, size: 18),
                     label: const Text('Save name'),
                   ),
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      try {
+                        final picker = ImagePicker();
+                        final file = await picker.pickImage(
+                          source: ImageSource.gallery,
+                          maxWidth: 1024,
+                          maxHeight: 1024,
+                          imageQuality: 92,
+                        );
+                        if (file == null) return;
+                        final bytes = await file.readAsBytes();
+                        final cropped =
+                            ImageCustomize.cropIconSquare(bytes, maxSize: 192);
+                        if (cropped != null) {
+                          await c.setAppIconOverride(raw.id, cropped);
+                          _statusLine = 'Custom icon from photo';
+                        }
+                      } catch (e) {
+                        _statusLine = 'Icon pick failed: $e';
+                      }
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted) setState(() {});
+                    },
+                    icon: const Icon(Icons.crop, size: 18),
+                    label: const Text('Icon from photo'),
+                  ),
                   OutlinedButton.icon(
                     onPressed: () async {
                       final pkg = raw.packageName ?? raw.id;
@@ -262,6 +291,8 @@ class _PhoneConnectionScreenState extends State<PhoneConnectionScreen>
       body: MorphBackground(
         wallpaperId: c.wallpaperId,
         palette: p,
+        customPortraitBytes: c.customWallpaperPortraitBytes,
+        customLandscapeBytes: c.customWallpaperLandscapeBytes,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(

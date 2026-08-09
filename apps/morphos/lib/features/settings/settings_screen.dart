@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
 
+import '../../core/image_customize.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
 import '../../core/system_morph_bridge.dart';
@@ -18,6 +20,56 @@ class SettingsScreen extends StatelessWidget {
 
   final MorphController controller;
 
+  Future<void> _pickWallpaper(
+    BuildContext context, {
+    required bool landscape,
+  }) async {
+    final c = controller;
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 88,
+      );
+      if (file == null) return;
+      final raw = await file.readAsBytes();
+      final prepared = ImageCustomize.prepareWallpaper(raw);
+      if (prepared == null ||
+          !ImageCustomize.isReasonableWallpaperPayload(prepared)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not use that image')),
+          );
+        }
+        return;
+      }
+      if (landscape) {
+        await c.setCustomWallpapers(landscapeBytes: prepared);
+      } else {
+        await c.setCustomWallpapers(portraitBytes: prepared);
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              landscape
+                  ? 'Landscape wallpaper set'
+                  : 'Portrait wallpaper set',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Wallpaper pick unavailable: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = controller;
@@ -28,6 +80,8 @@ class SettingsScreen extends StatelessWidget {
       body: MorphBackground(
       wallpaperId: c.wallpaperId,
       palette: p,
+      customPortraitBytes: c.customWallpaperPortraitBytes,
+      customLandscapeBytes: c.customWallpaperLandscapeBytes,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -105,6 +159,11 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
             _section(c, 'Wallpaper engine', [
+              Text(
+                'Built-in gradients, plus your own portrait & landscape photos.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -116,6 +175,62 @@ class SettingsScreen extends StatelessWidget {
                     onSelected: (_) => c.setWallpaper(w),
                   );
                 }).toList(),
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.crop_portrait, color: p.accentSecondary),
+                title: Text('Portrait wallpaper', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.customWallpaperPortraitB64 != null
+                      ? 'Custom photo set'
+                      : 'Pick from gallery',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                trailing: Icon(Icons.photo_library_outlined, color: p.muted),
+                onTap: () => _pickWallpaper(context, landscape: false),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.crop_landscape, color: p.accentSecondary),
+                title:
+                    Text('Landscape wallpaper', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.customWallpaperLandscapeB64 != null
+                      ? 'Custom photo set'
+                      : 'Pick from gallery',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                trailing: Icon(Icons.photo_library_outlined, color: p.muted),
+                onTap: () => _pickWallpaper(context, landscape: true),
+              ),
+              if (c.customWallpaperPortraitB64 != null ||
+                  c.customWallpaperLandscapeB64 != null)
+                TextButton.icon(
+                  onPressed: () => c.clearCustomWallpapers(),
+                  icon: const Icon(Icons.clear),
+                  label: const Text('Clear custom wallpapers'),
+                ),
+            ]),
+            _section(c, 'Default home launcher', [
+              Text(
+                c.systemStatus.isDefaultHome
+                    ? 'MorphOS is your default Home. Pressing Home returns here.'
+                    : 'Make MorphOS the global launcher so it is not just an app you exit.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () async {
+                  await SystemMorphBridge.requestHomeRole();
+                  await c.refreshSystemStatus();
+                },
+                icon: const Icon(Icons.home_filled),
+                label: Text(
+                  c.systemStatus.isDefaultHome
+                      ? 'Home settings'
+                      : 'Set MorphOS as Home',
+                ),
               ),
             ]),
             _section(c, 'Home layout (portrait default)', [

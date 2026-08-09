@@ -54,6 +54,15 @@ class MorphController extends ChangeNotifier {
   /// MorphOS-only custom icons (base64 PNG/JPEG). Does not change system icons.
   Map<String, String> iconOverridesB64 = {};
 
+  /// User-picked portrait wallpaper (base64 JPEG/PNG). Null = use [wallpaperId] gradient.
+  String? customWallpaperPortraitB64;
+
+  /// User-picked landscape wallpaper (base64 JPEG/PNG).
+  String? customWallpaperLandscapeB64;
+
+  /// User dismissed the “set as default home” banner (until next reinstall/reset).
+  bool launcherSetupDismissed = false;
+
   List<String> dockIds = const [
     'browser',
     'messages',
@@ -220,6 +229,12 @@ class MorphController extends ChangeNotifier {
                     ?.map((k, v) => MapEntry('$k', '$v')) ??
                 {},
           );
+          customWallpaperPortraitB64 =
+              m['customWallpaperPortraitB64'] as String?;
+          customWallpaperLandscapeB64 =
+              m['customWallpaperLandscapeB64'] as String?;
+          launcherSetupDismissed =
+              m['launcherSetupDismissed'] as bool? ?? false;
           dockIds = List<String>.from(m['dockIds'] as List? ?? dockIds);
           homeIds = List<String>.from(m['homeIds'] as List? ?? homeIds);
           timeBasedMorph = m['timeBasedMorph'] as bool? ?? false;
@@ -370,6 +385,9 @@ class MorphController extends ChangeNotifier {
         'largeTargets': largeTargets,
         'renames': renames,
         'iconOverridesB64': iconOverridesB64,
+        'customWallpaperPortraitB64': customWallpaperPortraitB64,
+        'customWallpaperLandscapeB64': customWallpaperLandscapeB64,
+        'launcherSetupDismissed': launcherSetupDismissed,
         'dockIds': dockIds,
         'homeIds': homeIds,
         'timeBasedMorph': timeBasedMorph,
@@ -919,6 +937,77 @@ class MorphController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Custom portrait/landscape wallpapers from user media (MorphOS home only).
+  /// Pass null for a slot to clear it. Empty list clears that orientation.
+  Future<void> setCustomWallpapers({
+    List<int>? portraitBytes,
+    List<int>? landscapeBytes,
+    bool clearPortrait = false,
+    bool clearLandscape = false,
+  }) async {
+    if (clearPortrait) {
+      customWallpaperPortraitB64 = null;
+    } else if (portraitBytes != null) {
+      if (portraitBytes.isEmpty) {
+        customWallpaperPortraitB64 = null;
+      } else if (portraitBytes.length <= 900 * 1024) {
+        customWallpaperPortraitB64 = base64Encode(portraitBytes);
+      }
+    }
+    if (clearLandscape) {
+      customWallpaperLandscapeB64 = null;
+    } else if (landscapeBytes != null) {
+      if (landscapeBytes.isEmpty) {
+        customWallpaperLandscapeB64 = null;
+      } else if (landscapeBytes.length <= 900 * 1024) {
+        customWallpaperLandscapeB64 = base64Encode(landscapeBytes);
+      }
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> clearCustomWallpapers() async {
+    customWallpaperPortraitB64 = null;
+    customWallpaperLandscapeB64 = null;
+    await _persist();
+    notifyListeners();
+  }
+
+  List<int>? get customWallpaperPortraitBytes {
+    final b64 = customWallpaperPortraitB64;
+    if (b64 == null || b64.isEmpty) return null;
+    try {
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<int>? get customWallpaperLandscapeBytes {
+    final b64 = customWallpaperLandscapeB64;
+    if (b64 == null || b64.isEmpty) return null;
+    try {
+      return base64Decode(b64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Resolve custom wallpaper bytes for the given orientation.
+  List<int>? customWallpaperFor({required bool landscape}) {
+    if (landscape) {
+      return customWallpaperLandscapeBytes ?? customWallpaperPortraitBytes;
+    }
+    return customWallpaperPortraitBytes ?? customWallpaperLandscapeBytes;
+  }
+
+  Future<void> dismissLauncherSetup() async {
+    launcherSetupDismissed = true;
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> setShowLabels(bool v) async {
     showLabels = v;
     await _persist();
@@ -1240,6 +1329,9 @@ class MorphController extends ChangeNotifier {
     largeTargets = env.largeTargets;
     renames = {};
     iconOverridesB64 = {};
+    customWallpaperPortraitB64 = null;
+    customWallpaperLandscapeB64 = null;
+    launcherSetupDismissed = false;
     dockIds = List<String>.from(env.dockIds);
     homeIds = List<String>.from(env.homeIds);
     await applyOrientation();
