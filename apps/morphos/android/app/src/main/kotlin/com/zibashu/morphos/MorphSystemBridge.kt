@@ -107,10 +107,26 @@ class MorphSystemBridge(
             "requestHomeRole" -> {
                 val act = activityRef.get()
                 if (act != null) {
+                    // Map with action / isHomeCandidate / message for Flutter UI.
                     result.success(MorphPlatform.requestHomeRole(act))
                 } else {
-                    result.success(MorphPlatform.openHomeSettings(context))
+                    val ok = MorphPlatform.openHomeSettings(context)
+                    result.success(
+                        mapOf(
+                            "ok" to ok,
+                            "action" to if (ok) "home_settings" else "failed",
+                            "message" to if (ok) {
+                                "Opened Home settings"
+                            } else {
+                                "No activity; could not open Home settings"
+                            },
+                            "isDefaultHome" to MorphPlatform.isDefaultHome(context),
+                        ) + MorphPlatform.probeHomeRegistration(context),
+                    )
                 }
+            }
+            "probeHomeRegistration" -> {
+                result.success(MorphPlatform.probeHomeRegistration(context))
             }
             "setKeepScreenOn" -> {
                 val keep = call.argument<Boolean>("keep") ?: false
@@ -181,6 +197,8 @@ class MorphSystemBridge(
                 "displayCount" to (info["displayCount"] ?: 1),
                 "hasExternalDisplay" to (info["hasExternalDisplay"] ?: false),
                 "isDefaultHome" to (platform["isDefaultHome"] ?: false),
+                "isHomeCandidate" to (platform["isHomeCandidate"] ?: false),
+                "homeCandidateCount" to (platform["homeCandidateCount"] ?: 0),
                 "ignoringBatteryOptimizations" to
                     (platform["ignoringBatteryOptimizations"] ?: false),
                 "sdkInt" to (platform["sdkInt"] ?: 0),
@@ -201,6 +219,8 @@ class MorphSystemBridge(
                 "displayCount" to 1,
                 "hasExternalDisplay" to false,
                 "isDefaultHome" to false,
+                "isHomeCandidate" to false,
+                "homeCandidateCount" to 0,
                 "ignoringBatteryOptimizations" to false,
                 "sdkInt" to 0,
                 "manufacturer" to "",

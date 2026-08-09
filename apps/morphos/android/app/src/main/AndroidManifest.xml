@@ -30,19 +30,20 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:enableOnBackInvokedCallback="true">
         <!--
-          LauncherOS-style home root (AOSP Launcher3 pattern):
-          singleTask + empty affinity + clearTaskOnLaunch + stateNotNeeded +
-          excludeFromRecents so Home returns here and MorphOS is not a normal app.
+          Third-party Home launcher (Nova-style): MAIN+HOME+DEFAULT is enough
+          for the system Home picker. No root / system privileges.
+
+          Flags: singleTask + empty affinity + excludeFromRecents (launcher feel).
+          Avoid clearTaskOnLaunch/stateNotNeeded — they break Flutter engine re-entry
+          and make “set as Home” feel broken after the system dialog.
         -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:label="MorphOS"
             android:launchMode="singleTask"
             android:taskAffinity=""
-            android:clearTaskOnLaunch="true"
-            android:stateNotNeeded="true"
             android:excludeFromRecents="true"
-            android:resumeWhilePausing="true"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -52,18 +53,19 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
-            <!-- App drawer / warehub icon entry -->
+            <!-- App drawer icon -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Default home / system Home button (LauncherOS categories). -->
+            <!--
+              REQUIRED for default Home: Android offers this activity when the
+              user picks a Home app. User approval is always required.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.HOME"/>
                 <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.MONKEY"/>
-                <category android:name="android.intent.category.LAUNCHER_APP"/>
             </intent-filter>
         </activity>
 

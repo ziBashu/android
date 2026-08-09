@@ -139,11 +139,14 @@ class SystemMorphBridge {
     } catch (_) {}
   }
 
-  static Future<void> openHomeSettings() async {
-    if (!isAndroid) return;
+  static Future<bool> openHomeSettings() async {
+    if (!isAndroid) return false;
     try {
-      await _channel.invokeMethod<void>('openHomeSettings');
-    } catch (_) {}
+      final ok = await _channel.invokeMethod<bool>('openHomeSettings');
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> openBatteryOptimizationSettings() async {
@@ -160,11 +163,63 @@ class SystemMorphBridge {
     } catch (_) {}
   }
 
-  static Future<void> requestHomeRole() async {
-    if (!isAndroid) return;
+  /// Open system Home picker / Home settings. Never silent — user must confirm.
+  /// Returns diagnostics: action, ok, message, isHomeCandidate, isDefaultHome.
+  static Future<HomeRoleResult> requestHomeRole() async {
+    if (!isAndroid) {
+      return const HomeRoleResult(
+        ok: false,
+        action: 'unsupported',
+        message: 'Home role is Android-only.',
+      );
+    }
     try {
-      await _channel.invokeMethod<void>('requestHomeRole');
-    } catch (_) {}
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('requestHomeRole');
+      return HomeRoleResult.fromMap(raw ?? const {});
+    } catch (e) {
+      return HomeRoleResult(
+        ok: false,
+        action: 'error',
+        message: 'requestHomeRole failed: $e',
+      );
+    }
+  }
+
+  static Future<HomeRoleResult> probeHomeRegistration() async {
+    if (!isAndroid) {
+      return const HomeRoleResult(
+        ok: false,
+        action: 'unsupported',
+        message: 'Android-only',
+      );
+    }
+    try {
+      final raw = await _channel
+          .invokeMapMethod<String, dynamic>('probeHomeRegistration');
+      final m = raw ?? const <String, dynamic>{};
+      final candidate = m['isHomeCandidate'] as bool? ?? false;
+      return HomeRoleResult(
+        ok: candidate,
+        action: 'probe',
+        message: candidate
+            ? 'PackageManager lists MorphOS as a Home candidate.'
+            : 'MorphOS is NOT listed as a Home app — reinstall the APK.',
+        isHomeCandidate: candidate,
+        isDefaultHome: m['isDefaultHome'] as bool? ?? false,
+        homeCandidateCount: m['homeCandidateCount'] as int? ?? 0,
+        homeCandidates: (m['homeCandidates'] as List?)
+                ?.map((e) => '$e')
+                .toList() ??
+            const [],
+      );
+    } catch (e) {
+      return HomeRoleResult(
+        ok: false,
+        action: 'error',
+        message: '$e',
+      );
+    }
   }
 
   static Future<void> setKeepScreenOn(bool keep) async {
@@ -213,6 +268,48 @@ class SystemMorphBridge {
       id.contains('.') && !id.contains(' ') && id.length > 3;
 }
 
+/// Result of opening the system Home-role / Home-settings UI.
+class HomeRoleResult {
+  const HomeRoleResult({
+    required this.ok,
+    required this.action,
+    required this.message,
+    this.isHomeCandidate = false,
+    this.isDefaultHome = false,
+    this.homeCandidateCount = 0,
+    this.homeCandidates = const [],
+    this.roleAvailable,
+    this.roleHeld,
+  });
+
+  final bool ok;
+  final String action;
+  final String message;
+  final bool isHomeCandidate;
+  final bool isDefaultHome;
+  final int homeCandidateCount;
+  final List<String> homeCandidates;
+  final bool? roleAvailable;
+  final bool? roleHeld;
+
+  factory HomeRoleResult.fromMap(Map<String, dynamic> m) {
+    return HomeRoleResult(
+      ok: m['ok'] as bool? ?? false,
+      action: '${m['action'] ?? ''}',
+      message: '${m['message'] ?? ''}',
+      isHomeCandidate: m['isHomeCandidate'] as bool? ?? false,
+      isDefaultHome: m['isDefaultHome'] as bool? ?? false,
+      homeCandidateCount: m['homeCandidateCount'] as int? ?? 0,
+      homeCandidates: (m['homeCandidates'] as List?)
+              ?.map((e) => '$e')
+              .toList() ??
+          const [],
+      roleAvailable: m['roleAvailable'] as bool?,
+      roleHeld: m['roleHeld'] as bool?,
+    );
+  }
+}
+
 class SystemMorphStatus {
   const SystemMorphStatus({
     required this.systemMorphEnabled,
@@ -227,6 +324,7 @@ class SystemMorphStatus {
     this.displayCount = 1,
     this.hasExternalDisplay = false,
     this.isDefaultHome = false,
+    this.isHomeCandidate = false,
     this.ignoringBatteryOptimizations = false,
     this.sdkInt = 0,
     this.manufacturer = '',
@@ -248,6 +346,8 @@ class SystemMorphStatus {
   final int displayCount;
   final bool hasExternalDisplay;
   final bool isDefaultHome;
+  /// PackageManager lists MorphOS under MAIN+HOME (eligible for Home picker).
+  final bool isHomeCandidate;
   final bool ignoringBatteryOptimizations;
   final int sdkInt;
   final String manufacturer;
@@ -260,6 +360,7 @@ class SystemMorphStatus {
     canWriteSettings: false,
     canDrawOverlays: false,
     globalOrientation: 'sensor',
+    isHomeCandidate: false,
     supported: false,
   );
 
@@ -299,6 +400,7 @@ class SystemMorphStatus {
       displayCount: m['displayCount'] as int? ?? 1,
       hasExternalDisplay: m['hasExternalDisplay'] as bool? ?? false,
       isDefaultHome: m['isDefaultHome'] as bool? ?? false,
+      isHomeCandidate: m['isHomeCandidate'] as bool? ?? false,
       ignoringBatteryOptimizations:
           m['ignoringBatteryOptimizations'] as bool? ?? false,
       sdkInt: m['sdkInt'] as int? ?? 0,

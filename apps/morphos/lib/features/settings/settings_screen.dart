@@ -216,21 +216,46 @@ class SettingsScreen extends StatelessWidget {
               Text(
                 c.systemStatus.isDefaultHome
                     ? 'MorphOS is your default Home. Pressing Home returns here.'
-                    : 'Make MorphOS the global launcher so it is not just an app you exit.',
+                    : 'Third-party launcher (Nova-style): MorphOS declares MAIN+HOME+DEFAULT. '
+                        'Android requires you to choose it once — no app can take over silently.',
                 style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                c.systemStatus.isHomeCandidate
+                    ? 'Status: registered as Home candidate on this device.'
+                    : 'Status: not seen as Home candidate — reinstall the APK.',
+                style: TextStyle(
+                  color: c.systemStatus.isHomeCandidate
+                      ? p.accentSecondary
+                      : const Color(0xFFFF8A80),
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: () async {
-                  await SystemMorphBridge.requestHomeRole();
+                  final r = await SystemMorphBridge.requestHomeRole();
                   await c.refreshSystemStatus();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(r.message)),
+                    );
+                  }
                 },
                 icon: const Icon(Icons.home_filled),
                 label: Text(
                   c.systemStatus.isDefaultHome
-                      ? 'Home settings'
-                      : 'Set MorphOS as Home',
+                      ? 'Open Home settings'
+                      : 'Choose MorphOS as Home',
                 ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await SystemMorphBridge.openHomeSettings();
+                  await c.refreshSystemStatus();
+                },
+                child: const Text('Open system Home settings'),
               ),
             ]),
             _section(c, 'Home layout (portrait default)', [

@@ -29,6 +29,7 @@ import '../morph/control_center.dart';
 import '../morph/morph_hub_screen.dart';
 import '../platform/platform_screen.dart';
 import '../settings/settings_screen.dart';
+import 'set_home_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.controller});
@@ -192,8 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _requestHomeRole() async {
-    await SystemMorphBridge.requestHomeRole();
-    await Future<void>.delayed(const Duration(milliseconds: 800));
+    await showSetHomeSheet(context: context, controller: c);
     await c.refreshSystemStatus();
     if (mounted) setState(() {});
   }

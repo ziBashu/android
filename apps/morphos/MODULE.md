@@ -16,14 +16,14 @@
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Personal adaptive environment — global home launcher, productivity widgets, morph packs. |
-| Version | **`1.1.0+12`** |
+| Version | **`1.1.1+13`** |
 | Launcher icon | Custom ziBashu brand mark (`assets/brand/morphos_launcher_1024.png`) — not Flutter default |
 
 ## Product identity
 
 > MorphOS sits between the user and the phone.  
 > **Android gives apps. MorphOS gives environments.**  
-> **1.1.0:** LauncherOS-style home root — Home/Back behave like a system launcher, not a nested app.
+> **1.1.1:** Third-party Home launcher (Nova-style) — MAIN+HOME+DEFAULT, system Home picker with diagnostics; user must confirm once.
 
 Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + five fundamentals).
 

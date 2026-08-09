@@ -215,10 +215,17 @@ class _PlatformScreenState extends State<PlatformScreen> {
                       ok: s.isDefaultHome,
                       detail: s.isDefaultHome
                           ? 'MorphOS is home'
-                          : 'Set MorphOS as default home',
+                          : (s.isHomeCandidate
+                              ? 'Registered as Home — choose it in system UI'
+                              : 'Not a Home candidate (reinstall APK)'),
                       action: 'Set home',
                       onTap: () async {
-                        await SystemMorphBridge.requestHomeRole();
+                        final r = await SystemMorphBridge.requestHomeRole();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(r.message)),
+                          );
+                        }
                         await Future<void>.delayed(const Duration(seconds: 1));
                         await _refresh();
                       },

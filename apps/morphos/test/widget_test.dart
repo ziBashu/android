@@ -487,4 +487,23 @@ void main() {
       isFalse,
     );
   });
+
+  test('HomeRoleResult maps system Home picker diagnostics', () {
+    final r = HomeRoleResult.fromMap({
+      'ok': true,
+      'action': 'role_request',
+      'message': 'Choose MorphOS',
+      'isHomeCandidate': true,
+      'isDefaultHome': false,
+      'homeCandidateCount': 3,
+      'homeCandidates': ['com.zibashu.morphos/.MainActivity'],
+      'roleAvailable': true,
+      'roleHeld': false,
+    });
+    expect(r.ok, isTrue);
+    expect(r.action, 'role_request');
+    expect(r.isHomeCandidate, isTrue);
+    expect(r.homeCandidateCount, 3);
+    expect(r.homeCandidates.first, contains('morphos'));
+  });
 }
