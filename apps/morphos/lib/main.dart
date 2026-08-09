@@ -1,10 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/home_nav.dart';
 import 'core/morph_controller.dart';
 import 'core/morph_palette.dart';
+import 'core/system_morph_bridge.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
+
+/// Root navigator — Home re-entry pops pushed Morph screens to root.
+final GlobalKey<NavigatorState> morphNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,15 +36,38 @@ class MorphOSApp extends StatefulWidget {
 
 class _MorphOSAppState extends State<MorphOSApp> {
   final MorphController _controller = MorphController();
+  StreamSubscription<Map<String, dynamic>>? _launcherSub;
 
   @override
   void initState() {
     super.initState();
     _controller.load();
+    _listenLauncherEvents();
+  }
+
+  void _listenLauncherEvents() {
+    _launcherSub?.cancel();
+    _launcherSub = SystemMorphBridge.launcherEventStream().listen((event) {
+      final type = '${event['type'] ?? ''}';
+      if (!HomeNav.shouldPopToRoot(type)) return;
+      _popToMorphHome();
+      // Refresh default-home status after role / home picker returns.
+      unawaited(_controller.refreshSystemStatus());
+    });
+  }
+
+  /// Pop every pushed route so Morph home is the only surface (LauncherOS).
+  void _popToMorphHome() {
+    final nav = morphNavigatorKey.currentState;
+    if (nav == null) return;
+    while (nav.canPop()) {
+      nav.pop();
+    }
   }
 
   @override
   void dispose() {
+    _launcherSub?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -47,6 +77,7 @@ class _MorphOSAppState extends State<MorphOSApp> {
     // Stable MaterialApp shell — only inner content listens (avoids full tree thrash).
     return MaterialApp(
       title: 'MorphOS',
+      navigatorKey: morphNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: MorphPalette.forTheme(_controller.themeId).toThemeData(),
       builder: (context, child) {

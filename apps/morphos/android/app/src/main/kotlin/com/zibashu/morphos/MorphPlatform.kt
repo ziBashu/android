@@ -152,12 +152,14 @@ object MorphPlatform {
             if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) &&
                 !rm.isRoleHeld(RoleManager.ROLE_HOME)
             ) {
-                // Prefer settings picker — no deprecated startActivityForResult.
-                // Role request still works via createRequestRoleIntent + NEW_TASK.
+                // Start from the Activity without NEW_TASK so the system
+                // home/role picker associates correctly (LauncherOS-style).
                 val intent = rm.createRequestRoleIntent(RoleManager.ROLE_HOME)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 activity.startActivity(intent)
                 true
+            } else if (rm != null && rm.isRoleHeld(RoleManager.ROLE_HOME)) {
+                // Already home — open settings so user can confirm / switch.
+                openHomeSettings(activity)
             } else {
                 openHomeSettings(activity)
             }

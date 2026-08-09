@@ -8,9 +8,33 @@ class SystemMorphBridge {
   SystemMorphBridge._();
 
   static const _channel = MethodChannel('com.zibashu.morphos/system');
+  static const _launcherEvents =
+      EventChannel('com.zibashu.morphos/launcher');
 
   static bool get isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// Stream of native launcher events: `{type: home|launcher|resume, ...}`.
+  static Stream<Map<String, dynamic>> launcherEventStream() {
+    if (!isAndroid) return const Stream.empty();
+    return _launcherEvents.receiveBroadcastStream().map((raw) {
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry('$k', v));
+      }
+      return <String, dynamic>{'type': 'resume'};
+    });
+  }
+
+  /// Launcher root: send MorphOS behind other apps (do not finish).
+  static Future<bool> moveTaskToBack() async {
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>('moveTaskToBack');
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Future<SystemMorphStatus> getStatus() async {
     if (!isAndroid) return SystemMorphStatus.unsupported;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:morphos/core/app_search.dart';
+import 'package:morphos/core/home_nav.dart';
 import 'package:morphos/core/image_customize.dart';
 import 'package:morphos/core/models.dart';
 import 'package:morphos/core/morph_controller.dart';
@@ -442,5 +443,48 @@ void main() {
     final c2 = MorphController();
     await c2.load();
     expect(c2.launcherSetupDismissed, isTrue);
+  });
+
+  // ── MorphOS 1.1.0: home-root launcher policy ──
+
+  test('HomeNav: back at root moves task to back, not pop', () {
+    expect(
+      HomeNav.shouldMoveTaskToBack(
+        navigatorCanPop: false,
+        atMorphHomeRoot: true,
+      ),
+      isTrue,
+    );
+    expect(
+      HomeNav.shouldMoveTaskToBack(
+        navigatorCanPop: true,
+        atMorphHomeRoot: true,
+      ),
+      isFalse,
+    );
+    expect(
+      HomeNav.shouldMoveTaskToBack(
+        navigatorCanPop: false,
+        atMorphHomeRoot: false,
+      ),
+      isFalse,
+    );
+  });
+
+  test('HomeNav: only HOME events force pop-to-root', () {
+    expect(HomeNav.shouldPopToRoot('home'), isTrue);
+    expect(HomeNav.shouldPopToRoot('launcher'), isFalse);
+    expect(HomeNav.shouldPopToRoot('resume'), isFalse);
+    expect(
+      HomeNav.isHomeCategories(const [
+        'android.intent.category.HOME',
+        'android.intent.category.DEFAULT',
+      ]),
+      isTrue,
+    );
+    expect(
+      HomeNav.isHomeCategories(const ['android.intent.category.LAUNCHER']),
+      isFalse,
+    );
   });
 }

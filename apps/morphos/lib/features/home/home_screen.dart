@@ -9,6 +9,7 @@ import 'package:zibashu_ui/zibashu_ui.dart';
 
 import '../../core/adaptive_engine.dart';
 import '../../core/app_catalog.dart';
+import '../../core/home_nav.dart';
 import '../../core/image_customize.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
@@ -531,7 +532,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final showLauncherCta =
         !c.launcherSetupDismissed && !c.systemStatus.isDefaultHome;
 
-    return Scaffold(
+    // Launcher root: system Back never finishes MorphOS — it backgrounds.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final nav = Navigator.of(context);
+        final moveBack = HomeNav.shouldMoveTaskToBack(
+          navigatorCanPop: nav.canPop(),
+          atMorphHomeRoot: true,
+        );
+        if (moveBack) {
+          await SystemMorphBridge.moveTaskToBack();
+        } else if (nav.canPop()) {
+          nav.pop();
+        } else {
+          await SystemMorphBridge.moveTaskToBack();
+        }
+      },
+      child: Scaffold(
       // Opaque fallback so a failed child never shows pure black emptiness.
       backgroundColor: p.scaffoldTint,
       body: MorphBackground(
@@ -626,6 +645,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
         ),
+      ),
       ),
     );
   }

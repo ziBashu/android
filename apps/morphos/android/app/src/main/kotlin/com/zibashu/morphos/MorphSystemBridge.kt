@@ -117,6 +117,19 @@ class MorphSystemBridge(
                 MorphPlatform.setKeepScreenOn(activityRef.get(), keep)
                 result.success(true)
             }
+            "moveTaskToBack" -> {
+                // Launcher root: never finish; send MorphOS behind other apps.
+                val act = activityRef.get()
+                val ok = try {
+                    act?.moveTaskToBack(true) ?: false
+                } catch (_: Exception) {
+                    false
+                }
+                result.success(ok)
+            }
+            "isHomeIntent" -> {
+                result.success(MainActivity.isHomeIntent(activityRef.get()?.intent))
+            }
             "cycleOrientationMode" -> {
                 val modes = listOf(
                     "sensor",

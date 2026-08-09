@@ -16,26 +16,29 @@
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Personal adaptive environment — global home launcher, productivity widgets, morph packs. |
-| Version | **`1.0.0+11`** |
+| Version | **`1.1.0+12`** |
 | Launcher icon | Custom ziBashu brand mark (`assets/brand/morphos_launcher_1024.png`) — not Flutter default |
 
 ## Product identity
 
 > MorphOS sits between the user and the phone.  
 > **Android gives apps. MorphOS gives environments.**  
-> **1.0.0:** first-class HOME launcher candidate with productivity chrome and full MorphOS-side customization.
+> **1.1.0:** LauncherOS-style home root — Home/Back behave like a system launcher, not a nested app.
 
 Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + five fundamentals).
 
-## 1.0.0 highlights
+## 1.1.0 highlights
 
 | Area | Feature |
 |------|---------|
-| Global launcher | MAIN+HOME+DEFAULT · singleTask · “Set as Home” CTA on home + settings |
-| Productivity | Battery widget · quick rotation · ranked quick app search |
+| **Home root** | LauncherOS flags: empty `taskAffinity`, `clearTaskOnLaunch`, `stateNotNeeded`, `excludeFromRecents` |
+| **Home intent** | Native EventChannel → Flutter always pops to Morph home on HOME |
+| **Back** | At home root → `moveTaskToBack` (never finish activity) |
+| **HOME filter** | MAIN+HOME+DEFAULT+MONKEY+LAUNCHER_APP · RoleManager without NEW_TASK |
+| Global launcher | “Set as Home” CTA on home + settings + platform |
+| Productivity | Battery · quick rotation · ranked app search |
 | Search | Label-first ranking (`brave` → **Brave**) |
-| Customization | Crop icon from photo · portrait + landscape wallpapers · icon scale / grid persist |
-| Morph engine | Profiles, intelligence modes, packs, system orientation (prior work) |
+| Customization | Icon crop · dual wallpapers · icon scale / grid persist |
 
 ## Five fundamentals
 
@@ -74,13 +77,14 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 | 0.7 Vision alignment | Study/Travel, intelligence modes, context rules, vision UI |
 | 0.7.1 Phone connection | Device app detect + rename/icon · system rotation permissions |
 | **1.0.0 Global launcher** | HOME role CTA · productivity strip · ranked search · dual wallpapers · icon crop |
+| **1.1.0 Home root** | LauncherOS task flags · Home pop-to-root · Back = moveTaskToBack |
 | 6+ Custom ROM | Long-term vision (not this APK) |
 
 ## Hardening
 
 - [x] No secrets in client
 - [x] Package `com.zibashu.morphos` only
-- [x] HOME + LAUNCHER intents (Flutter-safe activity flags; singleTask)
+- [x] HOME + LAUNCHER intents (LauncherOS-style home-root flags; singleTask)
 - [x] minSdk ≥ 24
 - [x] Cleartext traffic disabled + `network_security_config`
 - [x] allowBackup=false + data extraction excludes
@@ -90,7 +94,7 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 - [x] Custom MorphOS launcher icon (ziBashu forest/cream + brand mark)
 - [x] Demo/offline when device APIs fail
 - [x] analyze / unit tests / harden_check
-- [x] Warehub upload **v1.0.0** — https://zibashu4.com/hub/warehub/morphos
+- [x] Warehub upload **v1.1.0** — https://zibashu4.com/hub/warehub/morphos
 - [x] Dual signed release (upload keystore): warehub APK + Play AAB in `dist/`
 - [ ] Play Console upload (AAB ready; Internal track when requested)
 

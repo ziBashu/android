@@ -37,7 +37,7 @@ class LauncherSetupBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Use MorphOS as Home',
+                    'Set MorphOS as default Home',
                     style: TextStyle(
                       color: p.ink,
                       fontWeight: FontWeight.w800,
@@ -45,7 +45,7 @@ class LauncherSetupBanner extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Set as default launcher — Home returns here, not a nested app.',
+                    'After you choose MorphOS, the Home button returns here — like a real launcher.',
                     style: TextStyle(
                       color: p.muted,
                       fontSize: 11,
