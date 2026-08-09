@@ -90,9 +90,19 @@ const List<FamilyApp> kFamilyCatalog = [
     packageId: 'com.zibashu.morphos',
     surface: 'other',
     blurb:
-        'Personal adaptive environment — shapes, spaces, intelligence, morph packs.',
+        'Personal adaptive environment â€” shapes, spaces, intelligence, morph packs.',
     webRoute: '/hub',
     available: true,
     accentHex: 0xFF7C4DFF,
+  ),
+  FamilyApp(
+    slug: 'flux',
+    name: 'Flux',
+    packageId: 'com.zibashu.flux',
+    surface: 'tool',
+    blurb: 'Flux VPN - ziBashu-linked private network client (foundation, locked).',
+    webRoute: '/flux',
+    available: true,
+    accentHex: 0xFF2EE6D6,
   ),
 ];

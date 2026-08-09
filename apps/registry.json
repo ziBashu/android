@@ -78,6 +78,23 @@
                      "distribution":  [
                                           "warehub"
                                       ]
+                 },
+                 {
+                     "key":  "flux",
+                     "slug":  "flux",
+                     "name":  "Flux",
+                     "dir":  "apps/flux",
+                     "packageId":  "com.zibashu.flux",
+                     "kind":  "tool",
+                     "surface":  "tool",
+                     "route":  "/flux",
+                     "blurb":  "Flux VPN — ziBashu-linked private network client (foundation, locked).",
+                     "available":  true,
+                     "accentHex":  "0xFF2EE6D6",
+                     "distribution":  [
+                                          "warehub",
+                                          "play"
+                                      ]
                  }
              ]
 }
