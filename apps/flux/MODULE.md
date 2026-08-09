@@ -23,12 +23,16 @@
 cd C:\Users\syxMa\ANDROID
 . .\scripts\env.ps1
 .\scripts\build_flux_dual.ps1
+.\scripts\publish_flux_warehub.ps1
 ```
 
 Artifacts:
 
-- `dist/flux-v0.1.0-warehub.apk`
-- `dist/flux-v0.1.0-play.aab`
+- `dist/flux-v0.1.0-warehub.apk` → **WareHub** public
+- `dist/flux-v0.1.0-play.aab` → Play Console (+ private server archive)
+
+Public listing: https://zibashu4.com/hub/warehub/flux  
+Windows bundles stay on **vault** (`/opt/windows-vault/flux`), not public WareHub.
 
 ## Server
 
@@ -37,3 +41,4 @@ Laravel:
 - `App\Http\Controllers\FluxController`
 - routes in `routes/api.php` + `routes/web.php`
 - state file: `storage/app/flux/control.json`
+- session issue: `POST /api/flux/session` (403 while locked)
