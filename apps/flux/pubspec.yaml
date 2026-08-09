@@ -1,7 +1,7 @@
 name: flux
 description: Flux VPN — ziBashu-linked private network client (HULK foundation, locked).
 publish_to: none
-version: 0.1.0+1
+version: 0.3.0+3
 
 environment:
   sdk: ^3.5.0
@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.2
+  flutter_secure_storage: ^9.2.2
   zibashu_core:
     path: ../../packages/zibashu_core
   zibashu_ui:

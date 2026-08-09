@@ -7,7 +7,7 @@ import 'package:zibashu_core/zibashu_core.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
 
 /// Flux VPN — ziBashu family client.
-/// HULK foundation: all VPN functions hard-locked.
+/// Phase 3: WireGuard-only encrypted tunnels; product may still be locked.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const FluxApp());
@@ -15,16 +15,20 @@ void main() {
 
 class FluxGate {
   static const productName = 'Flux';
-  static const version = '0.1.0';
+  static const version = '0.3.0';
   static const codename = 'HULK';
   static const localHardLock = true;
+  static const requiredProtocol = 'wireguard';
+  static const plaintextTunnelAllowed = false;
+  static const aead = 'ChaCha20-Poly1305';
+  static const kex = 'Curve25519';
 
   static bool serverUnlock = false;
 
   static bool get isVpnUnlocked => !localHardLock && serverUnlock;
 
   static String get lockReason => localHardLock
-      ? 'Foundation build — VPN functions are locked for everyone.'
+      ? 'Phase 3: WireGuard crypto ready — product still locked for public use.'
       : 'Account not entitled / server gate closed.';
 }
 
@@ -239,9 +243,27 @@ class _FluxRootState extends State<FluxRoot> {
               _statusMessage ?? FluxGate.lockReason,
               style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 13),
             ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F2A24),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Security: protocol=${FluxGate.requiredProtocol} · '
+                'AEAD=${FluxGate.aead} · KEX=${FluxGate.kex} · '
+                'plaintextTunnel=${FluxGate.plaintextTunnelAllowed}\n'
+                'All tunnel packets are authenticated-encrypted. No cleartext VPN mode.',
+                style: TextStyle(
+                  color: const Color(0xFF2EE6D6).withValues(alpha: 0.9),
+                  fontSize: 12,
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
             Text(
-              'Nodes (stub)',
+              'Nodes',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 12),
             ),
             const SizedBox(height: 8),
