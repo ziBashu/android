@@ -101,8 +101,11 @@ class MorphChromeService : Service() {
             return
         }
         if (sidebarOn) ensureSidebar() else remove(sidebar).also { sidebar = null }
-        if (islandOn) ensureIsland() else remove(island).also { island = null }
-        if (shadeOn) ensureShadeHandle() else remove(shadeHandle).also { shadeHandle = null }
+        if (islandOn) refreshIsland() else remove(island).also { island = null }
+        // Shade is home-only. A full-width TYPE_APPLICATION_OVERLAY at y=0
+        // would steal the OEM status-bar swipe. Do not add a MATCH_PARENT
+        // Gravity.TOP handle.
+        remove(shadeHandle).also { shadeHandle = null }
     }
 
     private fun ensureSidebar() {
@@ -140,7 +143,9 @@ class MorphChromeService : Service() {
                     return true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (!moved) toggleExpanded()
+                    val dx = ev.rawX - downX
+                    val dy = ev.rawY - downY
+                    if (!moved || inwardSwipe(dx, dy)) toggleExpanded()
                     return true
                 }
             }
@@ -173,12 +178,27 @@ class MorphChromeService : Service() {
             .apply()
     }
 
+    private fun inwardSwipe(dx: Float, dy: Float): Boolean {
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val rim = prefs.getString(KEY_RIM, "right") ?: "right"
+        val minInward = dp(20).toFloat()
+        return when (rim) {
+            "left" -> dx >= minInward
+            "right" -> dx <= -minInward
+            "top" -> dy >= minInward
+            else -> dy <= -minInward
+        }
+    }
+
     private fun handleLp(): WindowManager.LayoutParams {
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val rim = prefs.getString(KEY_RIM, "right") ?: "right"
         val along = prefs.getFloat(KEY_ALONG, 0.42f)
         val vertical = rim == "left" || rim == "right"
-        val lp = baseParams(if (vertical) dp(5) else dp(36), if (vertical) dp(36) else dp(5))
+        val lp = baseParams(
+            if (vertical) dp(SIDEBAR_HIT_W_DP) else dp(SIDEBAR_HIT_H_DP),
+            if (vertical) dp(SIDEBAR_HIT_H_DP) else dp(SIDEBAR_HIT_W_DP),
+        )
         lp.gravity = when (rim) {
             "left" -> Gravity.START or Gravity.TOP
             "right" -> Gravity.END or Gravity.TOP
@@ -187,11 +207,11 @@ class MorphChromeService : Service() {
         }
         val dm = resources.displayMetrics
         if (vertical) {
-            lp.y = (along * (dm.heightPixels - dp(36))).toInt()
-            lp.x = dp(2)
+            lp.y = (along * (dm.heightPixels - dp(SIDEBAR_HIT_H_DP))).toInt()
+            lp.x = 0
         } else {
-            lp.x = (along * (dm.widthPixels - dp(36))).toInt()
-            lp.y = dp(2)
+            lp.x = (along * (dm.widthPixels - dp(SIDEBAR_HIT_H_DP))).toInt()
+            lp.y = if (rim == "top") dp(STATUS_BAR_BAND_DP) else 0
         }
         return lp
     }
@@ -257,54 +277,34 @@ class MorphChromeService : Service() {
         add(col, lp)
     }
 
-    private fun ensureIsland() {
-        if (island != null) {
-            refreshIsland()
-            return
-        }
-        val pill = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            textSize = 12f
-            setPadding(dp(16), dp(8), dp(16), dp(8))
-            setBackgroundColor(0xE6000000.toInt())
-            setOnClickListener { bringHome("island") }
-        }
-        island = pill
-        val lp = baseParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-        )
-        lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        lp.y = dp(8)
-        add(pill, lp)
-        refreshIsland()
-    }
-
     private fun refreshIsland() {
-        val pill = island ?: return
         val snap = MorphQs.islandSnapshot(this)
         val kind = snap["kind"]?.toString() ?: "idle"
-        val title = snap["title"]?.toString().orEmpty()
-        pill.text = if (kind == "idle") "●" else title.ifBlank { kind }
-    }
-
-    private fun ensureShadeHandle() {
-        if (shadeHandle != null) return
-        val handle = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-            setOnTouchListener { _, ev ->
-                if (ev.action == MotionEvent.ACTION_DOWN) {
-                    bringHome("shade")
-                    true
-                } else {
-                    false
-                }
-            }
+        if (kind == "idle") {
+            remove(island).also { island = null }
+            return
         }
-        shadeHandle = handle
-        val lp = baseParams(WindowManager.LayoutParams.MATCH_PARENT, dp(28))
-        lp.gravity = Gravity.TOP
-        add(handle, lp)
+        val title = snap["title"]?.toString().orEmpty().ifBlank { kind }
+        var pill = island
+        if (pill == null) {
+            pill = TextView(this).apply {
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                setPadding(dp(16), dp(8), dp(16), dp(8))
+                setBackgroundColor(0xE6000000.toInt())
+                setOnClickListener { bringHome("island") }
+            }
+            island = pill
+            val lp = baseParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+            )
+            lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            // Below the OEM cutout / Magic Capsule — never covers the OEM island.
+            lp.y = dp(ISLAND_TOP_INSET_DP)
+            add(pill, lp)
+        }
+        pill.text = title
     }
 
     private fun bringHome(reason: String) {
@@ -390,6 +390,10 @@ class MorphChromeService : Service() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     companion object {
+        const val SIDEBAR_HIT_W_DP = 32
+        const val SIDEBAR_HIT_H_DP = 128
+        const val STATUS_BAR_BAND_DP = 32
+        const val ISLAND_TOP_INSET_DP = 56
         const val PREFS = "morph_chrome"
         const val KEY_SIDEBAR = "sidebar"
         const val KEY_SHADE = "shade"

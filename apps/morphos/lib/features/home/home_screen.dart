@@ -224,7 +224,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         unawaited(_openShade());
       } else if (type == 'island') {
         unawaited(_refreshIsland());
-        setState(() => _island = _island.expand());
       }
     });
   }
@@ -706,12 +705,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final slots = c.homeIds;
     final dock = _dockApps;
     return SafeArea(
+      top: false,
       child: Stack(
         children: [
           Column(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 6, bottom: 4),
+                padding: EdgeInsets.only(
+                  top: MediaQuery.paddingOf(context).top,
+                ),
                 child: _topChrome(),
               ),
               if (_selecting)
@@ -757,6 +759,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: 8),
             ],
           ),
+          if (c.chromeFlags.notificationBar)
+            Positioned(
+              top: HomeGestures.statusBarBandHeight,
+              left: 0,
+              right: 0,
+              height: HomeGestures.morphShadeBandHeight,
+              child: _MorphShadePull(
+                notificationBar: c.chromeFlags.notificationBar,
+                onMorph: () => unawaited(_openShade()),
+              ),
+            ),
           if (c.chromeFlags.sidebar)
             SidebarEdge(
               controller: c,
@@ -774,51 +787,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _topChrome() {
-    if (c.chromeFlags.smartIsland) {
-      return SmartIslandPill(
-        activity: _island,
-        onTap: _toggleIsland,
-        onPullDown: c.chromeFlags.notificationBar
-            ? () => unawaited(_openShade())
-            : null,
-        onOpenShade: c.chromeFlags.notificationBar
-            ? () => unawaited(_openShade())
-            : null,
-        onSeek: (v) {
-          setState(() => _island = _island.copyWith(progress: v));
-          unawaited(SystemMorphBridge.islandCommand('seek:$v'));
-        },
-        onPrevious: () =>
-            unawaited(SystemMorphBridge.islandCommand('previous')),
-        onPause: () => unawaited(SystemMorphBridge.islandCommand('pause')),
-        onNext: () => unawaited(SystemMorphBridge.islandCommand('next')),
-      );
-    }
-    if (c.chromeFlags.notificationBar) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => unawaited(_openShade()),
-        onVerticalDragEnd: (d) {
-          if (HomeGestures.openShadeFromTopPull(
-            notificationBar: true,
-            primaryVelocity: d.primaryVelocity ?? 0,
-          )) {
-            unawaited(_openShade());
-          }
-        },
-        child: Center(
-          child: Container(
-            width: 48,
-            height: 6,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(99),
-            ),
-          ),
+    if (c.chromeFlags.smartIsland && HomeGestures.islandDrawn(_island)) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 4),
+        child: SmartIslandPill(
+          activity: _island,
+          onTap: _toggleIsland,
+          onPullDown: c.chromeFlags.notificationBar
+              ? () => unawaited(_openShade())
+              : null,
+          onOpenShade: c.chromeFlags.notificationBar
+              ? () => unawaited(_openShade())
+              : null,
+          onSeek: (v) {
+            setState(() => _island = _island.copyWith(progress: v));
+            unawaited(SystemMorphBridge.islandCommand('seek:$v'));
+          },
+          onPrevious: () =>
+              unawaited(SystemMorphBridge.islandCommand('previous')),
+          onPause: () => unawaited(SystemMorphBridge.islandCommand('pause')),
+          onNext: () => unawaited(SystemMorphBridge.islandCommand('next')),
         ),
       );
     }
-    return const SizedBox(height: 8);
+    return const SizedBox.shrink();
   }
 
   Widget _selectBar() {
@@ -1059,6 +1051,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       }
     } catch (_) {}
+    if (snap.media == null) {
+      snap = snap.copyWith(media: ShadeMedia.fromActivity(_island));
+    }
     if (!mounted) return;
     await showMorphShade(
       context,
@@ -1068,20 +1063,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         try {
           final raw = await SystemMorphBridge.getShadeSnapshot();
           if (raw.isNotEmpty) {
-            return ShadeSnapshot.fromNative(
+            var next = ShadeSnapshot.fromNative(
               raw,
               now: DateTime.now(),
               batteryPercent: _batterySnap.unknown ? 0 : _batterySnap.level,
             );
+            next = next.copyWith(
+              media: next.media ?? ShadeMedia.fromActivity(_island),
+            );
+            return next;
           }
         } catch (_) {}
-        return shadeSnapshotFallback(battery: _batterySnap);
+        return shadeSnapshotFallback(battery: _batterySnap).copyWith(
+          media: ShadeMedia.fromActivity(_island),
+        );
       },
       onToggle: (id) async {
         await SystemMorphBridge.toggleShadeTile(id.name);
       },
       onBrightness: (v) async {
         await SystemMorphBridge.setBrightness(v);
+      },
+      onMediaCommand: (cmd) async {
+        await SystemMorphBridge.islandCommand(cmd);
       },
     );
   }
@@ -1090,14 +1094,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final raw = await SystemMorphBridge.getIslandSnapshot();
       if (raw.isEmpty) return;
-      final next = IslandActivity.fromJson(raw);
+      final next = IslandActivity.fromNativeSnapshot(raw);
       if (mounted) {
-        setState(() => _island = next.copyWith(expanded: _island.expanded));
+        setState(() {
+          _island = next.isIdle
+              ? IslandActivity.idle
+              : next.copyWith(expanded: _island.expanded && !next.isIdle);
+        });
       }
     } catch (_) {}
   }
 
   void _toggleIsland() {
+    if (!HomeGestures.islandDrawn(_island)) return;
     setState(() {
       _island = _island.expanded ? _island.compact() : _island.expand();
     });
@@ -1242,6 +1251,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Lower-upper pull only. Upmost / status-bar Y is left to the system shade.
+class _MorphShadePull extends StatefulWidget {
+  const _MorphShadePull({
+    required this.notificationBar,
+    required this.onMorph,
+  });
+
+  final bool notificationBar;
+  final VoidCallback onMorph;
+
+  @override
+  State<_MorphShadePull> createState() => _MorphShadePullState();
+}
+
+class _MorphShadePullState extends State<_MorphShadePull> {
+  double _startY = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: (d) => _startY = d.globalPosition.dy,
+      onVerticalDragEnd: (d) {
+        if (HomeGestures.shadeOwnerForPull(
+              notificationBar: widget.notificationBar,
+              startY: _startY,
+              primaryVelocity: d.primaryVelocity ?? 0,
+            ) ==
+            ShadeOwner.morph) {
+          widget.onMorph();
+        }
+      },
     );
   }
 }

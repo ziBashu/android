@@ -16,7 +16,7 @@
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Personal adaptive environment — global home launcher, productivity widgets, morph packs. |
-| Version | **`1.2.3+18`** |
+| Version | **`1.2.4+19`** |
 | Launcher icon | Custom ziBashu brand mark (`assets/brand/morphos_launcher_1024.png`) — not Flutter default |
 
 ## Product identity
@@ -80,6 +80,7 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 | **1.1.0 Home root** | LauncherOS task flags · Home pop-to-root · Back = moveTaskToBack |
 | **1.1.2 Home polish** | Add App · clock optional · Verdant Emerald default wallpaper · real launcher icons · notes file path · browser search + weather widgets · App Library tap opens |
 | **1.2.0 Next home** | App-info long-press · Select folders · Hide · void occupancy · Morph shade · Smart Island · sidebar · all-apps look |
+| **1.2.4 Chrome** | Easier rim sidebar · idle island occupies 0 · live media transport · Morph shade only from lower-upper pull · OEM island/shade unblocked |
 | 6+ Custom ROM | Long-term vision (not this APK) |
 
 ## Hardening
@@ -96,9 +97,9 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 - [x] Custom MorphOS launcher icon (ziBashu forest/cream + brand mark)
 - [x] Demo/offline when device APIs fail
 - [x] analyze / unit tests / harden_check
-- [x] Warehub upload **v1.2.3** — https://zibashu4.com/hub/warehub/morphos
+- [x] Warehub upload **v1.2.4** — https://zibashu4.com/hub/warehub/morphos
 - [x] Dual signed release (upload keystore): warehub APK + Play AAB in `dist/`
-- [ ] Play Console upload (AAB ready at `dist/morphos-v1.2.3-play.aab`; Internal track when requested)
+- [ ] Play Console upload (AAB ready at `dist/morphos-v1.2.4-play.aab`; Internal track when requested)
 
 ## References
 

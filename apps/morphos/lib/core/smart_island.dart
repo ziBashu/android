@@ -59,7 +59,9 @@ class IslandActivity {
   }
 
   IslandActivity compact() => copyWith(expanded: false);
-  IslandActivity expand() => copyWith(expanded: true);
+
+  /// Idle stays idle — expanding it must not create occupying chrome.
+  IslandActivity expand() => isIdle ? this : copyWith(expanded: true);
 
   IslandActivity copyWith({
     IslandKind? kind,
@@ -92,7 +94,7 @@ class IslandActivity {
   }) {
     return IslandActivity(
       kind: IslandKind.music,
-      title: title,
+      title: title.isEmpty ? (playing ? 'Now playing' : 'Music') : title,
       subtitle: artist,
       playing: playing,
       progress: progress.clamp(0, 1),
@@ -201,11 +203,28 @@ class IslandActivity {
     return IslandActivity(
       kind: kind,
       title: '${m['title'] ?? ''}',
-      subtitle: '${m['subtitle'] ?? ''}',
+      subtitle: '${m['subtitle'] ?? m['artist'] ?? ''}',
       expanded: m['expanded'] as bool? ?? false,
       progress: (m['progress'] as num?)?.toDouble() ?? 0,
       playing: m['playing'] as bool? ?? false,
       elapsedLabel: '${m['elapsedLabel'] ?? ''}',
     );
+  }
+
+  /// Native overlay / MediaSession snapshot → live activity.
+  /// Music with a blank title still becomes a shown Now playing row.
+  static IslandActivity fromNativeSnapshot(Map<String, dynamic>? m) {
+    if (m == null || m.isEmpty) return idle;
+    final parsed = fromJson(m);
+    if (parsed.kind == IslandKind.music) {
+      return music(
+        title: parsed.title,
+        artist: parsed.subtitle,
+        playing: parsed.playing,
+        progress: parsed.progress,
+        expanded: parsed.expanded,
+      );
+    }
+    return parsed;
   }
 }

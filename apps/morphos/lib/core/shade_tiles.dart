@@ -1,6 +1,8 @@
 /// Morph notification-bar / control-center tiles. Pure — tests page + state.
 library;
 
+import 'smart_island.dart';
+
 /// Essential set. First screen holds 8–10; the rest wait behind expand.
 enum ShadeTileId {
   wifi,
@@ -141,6 +143,9 @@ class ShadeMedia {
   final bool playing;
   final double progress;
 
+  /// Shade media row always offers play/pause/prev/next (+ seek when known).
+  bool get hasTransport => true;
+
   Map<String, dynamic> toJson() => {
         'title': title,
         'artist': artist,
@@ -151,12 +156,29 @@ class ShadeMedia {
   static ShadeMedia? fromJson(Map<String, dynamic>? m) {
     if (m == null) return null;
     final title = '${m['title'] ?? ''}';
-    if (title.isEmpty) return null;
+    final artist = '${m['artist'] ?? m['subtitle'] ?? ''}';
+    final playing = m['playing'] as bool? ?? false;
+    final progress = (m['progress'] as num?)?.toDouble() ?? 0;
+    if (title.isEmpty && artist.isEmpty && !playing && progress <= 0) {
+      return null;
+    }
     return ShadeMedia(
-      title: title,
-      artist: '${m['artist'] ?? ''}',
-      playing: m['playing'] as bool? ?? false,
-      progress: (m['progress'] as num?)?.toDouble() ?? 0,
+      title: title.isEmpty ? (playing ? 'Now playing' : 'Music') : title,
+      artist: artist,
+      playing: playing,
+      progress: progress,
+    );
+  }
+
+  static ShadeMedia? fromActivity(IslandActivity activity) {
+    if (!activity.isMusic) return null;
+    return ShadeMedia(
+      title: activity.title.isEmpty
+          ? (activity.playing ? 'Now playing' : 'Music')
+          : activity.title,
+      artist: activity.subtitle,
+      playing: activity.playing,
+      progress: activity.progress,
     );
   }
 }

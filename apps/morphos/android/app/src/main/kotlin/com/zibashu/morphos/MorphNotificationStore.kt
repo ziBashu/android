@@ -5,21 +5,28 @@ import android.service.notification.StatusBarNotification
 object MorphNotificationStore {
     private val lock = Any()
     private val items = LinkedHashMap<String, Map<String, Any?>>()
+    private var mediaHintRow: Map<String, Any?>? = null
 
     fun upsert(sbn: StatusBarNotification) {
         val extras = sbn.notification.extras
         val title = extras?.getCharSequence("android.title")?.toString().orEmpty()
         val text = extras?.getCharSequence("android.text")?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return
+        val category = sbn.notification.category ?: ""
+        val template = extras?.getString("android.template").orEmpty()
         val row = mapOf(
             "key" to sbn.key,
             "packageName" to sbn.packageName,
             "title" to title.ifBlank { sbn.packageName },
             "body" to text,
-            "category" to (sbn.notification.category ?: ""),
+            "category" to category,
+            "template" to template,
         )
         synchronized(lock) {
             items[sbn.key] = row
+            if (isMediaStyle(category, template)) {
+                mediaHintRow = row
+            }
             while (items.size > 24) {
                 val first = items.keys.first()
                 items.remove(first)
@@ -28,7 +35,32 @@ object MorphNotificationStore {
     }
 
     fun remove(key: String) {
-        synchronized(lock) { items.remove(key) }
+        synchronized(lock) {
+            items.remove(key)
+            if (mediaHintRow?.get("key") == key) mediaHintRow = null
+        }
+    }
+
+    fun mediaHint(): Map<String, Any?>? {
+        val row = synchronized(lock) { mediaHintRow }
+            ?: list().firstOrNull { isMediaStyle("${it["category"]}", "${it["template"]}") }
+            ?: return null
+        val title = (row["title"] as? String).orEmpty()
+        val body = (row["body"] as? String).orEmpty()
+        return mapOf(
+            "kind" to "music",
+            "title" to title.ifBlank { "Now playing" },
+            "subtitle" to body,
+            "playing" to true,
+            "progress" to 0.0,
+            "expanded" to false,
+            "elapsedLabel" to "",
+        )
+    }
+
+    private fun isMediaStyle(category: String, template: String): Boolean {
+        return category == android.app.Notification.CATEGORY_TRANSPORT ||
+            template.contains("MediaStyle")
     }
 
     fun list(): List<Map<String, Any?>> {

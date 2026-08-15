@@ -268,9 +268,42 @@ void main() {
         isFalse,
       );
       expect(
+        HomeGestures.shadeOwnerForPull(
+          notificationBar: true,
+          startY: 8,
+          primaryVelocity: 400,
+        ),
+        ShadeOwner.system,
+      );
+      expect(
+        HomeGestures.shadeOwnerForPull(
+          notificationBar: true,
+          startY: 56,
+          primaryVelocity: 400,
+        ),
+        ShadeOwner.morph,
+      );
+      expect(
+        HomeGestures.shadeOwnerForPull(
+          notificationBar: false,
+          startY: 56,
+          primaryVelocity: 400,
+        ),
+        ShadeOwner.none,
+      );
+      expect(
         HomeGestures.openShadeFromTopPull(
           notificationBar: true,
           primaryVelocity: 400,
+          startY: 8,
+        ),
+        isFalse,
+      );
+      expect(
+        HomeGestures.openShadeFromTopPull(
+          notificationBar: true,
+          primaryVelocity: 400,
+          startY: 56,
         ),
         isTrue,
       );
@@ -281,10 +314,12 @@ void main() {
         ),
         isFalse,
       );
+      expect(HomeGestures.overlayStealsUpmostEdge, isFalse);
       final home = File('lib/features/home/home_screen.dart').readAsStringSync();
-      expect(home, contains('HomeGestures.openShadeFromTopPull'));
+      expect(home, contains('HomeGestures.shadeOwnerForPull'));
       expect(home, contains('_topChrome'));
       expect(home, contains('SmartIslandPill'));
+      expect(home, contains('_MorphShadePull'));
       expect(home, isNot(contains('showMorphControlCenter')));
       expect(
         File('lib/features/morph/morph_shade.dart').readAsStringSync(),
@@ -297,13 +332,57 @@ void main() {
     });
 
     test('sidebar handle is a short line and can add apps', () {
-      expect(HomeGestures.sidebarHandleHeight, lessThan(50));
-      expect(HomeGestures.sidebarHandleWidth, lessThan(12));
+      expect(
+        HomeGestures.sidebarHitArea,
+        greaterThan(HomeGestures.legacySidebarHitArea),
+      );
+      expect(HomeGestures.sidebarHitHeight, lessThan(400));
+      expect(HomeGestures.sidebarHitWidth, lessThan(48));
+      expect(
+        HomeGestures.sidebarHitContains(
+          inwardFromRim: 16,
+          alongFromCenter: 20,
+        ),
+        isTrue,
+      );
+      expect(
+        HomeGestures.sidebarHitContains(
+          inwardFromRim: 80,
+          alongFromCenter: 0,
+        ),
+        isFalse,
+      );
+      expect(
+        HomeGestures.openSidebarFromRimSwipe(
+          rim: ScreenRim.right,
+          startX: 392,
+          startY: 336,
+          dx: -40,
+          dy: 0,
+          screenW: 400,
+          screenH: 800,
+          along: 0.42,
+        ),
+        isTrue,
+      );
+      expect(
+        HomeGestures.openSidebarFromRimSwipe(
+          rim: ScreenRim.right,
+          startX: 200,
+          startY: 336,
+          dx: -40,
+          dy: 0,
+          screenW: 400,
+          screenH: 800,
+          along: 0.42,
+        ),
+        isFalse,
+      );
       final snapped = SidebarPlacement.fromPoint(10, 200, 400, 800);
       expect(snapped.rim, ScreenRim.left);
-      expect(HomeGestures.islandIdleHeight, greaterThanOrEqualTo(32));
       final side = File('lib/widgets/sidebar_edge.dart').readAsStringSync();
-      expect(side, contains('HomeGestures.sidebarHandleHeight'));
+      expect(side, contains('HomeGestures.sidebarHitWidth'));
+      expect(side, contains('HomeGestures.openSidebarFromRimSwipe'));
       expect(side, contains('onAdd'));
       expect(side, contains('Add app'));
       expect(side, isNot(contains('double.infinity')));
@@ -364,6 +443,8 @@ void main() {
       for (final a in kinds) {
         expect(a.isIdle, isFalse);
         expect(a.expanded, isFalse);
+        expect(HomeGestures.islandDrawn(a), isTrue);
+        expect(HomeGestures.islandOccupancyHeight(a), greaterThan(0));
         final open = a.expand();
         expect(open.expanded, isTrue);
         expect(open.kind, a.kind);
@@ -374,8 +455,88 @@ void main() {
       expect(music.expandControls, containsAll(['seek', 'previous', 'pause', 'next']));
       expect(IslandActivity.musicTransport, contains('seek'));
       expect(IslandActivity.idle.expand().isIdle, isTrue);
-      expect(IslandActivity.idle.expand().expanded, isTrue);
+      expect(HomeGestures.islandDrawn(IslandActivity.idle), isFalse);
+      expect(HomeGestures.islandOccupancyHeight(IslandActivity.idle), 0);
+      expect(HomeGestures.overlayIslandShown(IslandActivity.idle), isFalse);
     });
+
+    test('native music snapshot maps to a shown activity and shade media row',
+        () {
+      final activity = IslandActivity.fromNativeSnapshot({
+        'kind': 'music',
+        'title': 'Midnight City',
+        'subtitle': 'M83',
+        'playing': true,
+        'progress': 0.35,
+      });
+      expect(activity.isMusic, isTrue);
+      expect(activity.isIdle, isFalse);
+      expect(activity.title, 'Midnight City');
+      expect(activity.subtitle, 'M83');
+      expect(activity.playing, isTrue);
+      expect(activity.expandControls, containsAll(IslandActivity.musicTransport));
+      expect(HomeGestures.islandDrawn(activity), isTrue);
+
+      final untitled = IslandActivity.fromNativeSnapshot({
+        'kind': 'music',
+        'title': '',
+        'playing': true,
+        'progress': 0,
+      });
+      expect(untitled.isMusic, isTrue);
+      expect(untitled.title, 'Now playing');
+
+      final snap = ShadeSnapshot.fromNative({
+        'media': {
+          'title': 'Midnight City',
+          'artist': 'M83',
+          'playing': true,
+          'progress': 0.35,
+        },
+      });
+      expect(snap.media, isNotNull);
+      expect(snap.media!.title, 'Midnight City');
+      expect(snap.media!.playing, isTrue);
+      expect(snap.media!.hasTransport, isTrue);
+      expect(ShadeMedia.fromActivity(activity)?.title, 'Midnight City');
+
+      final blankMedia = ShadeMedia.fromJson({'title': '', 'playing': true});
+      expect(blankMedia, isNotNull);
+      expect(blankMedia!.title, 'Now playing');
+
+      final pill = File('lib/widgets/smart_island_pill.dart').readAsStringSync();
+      expect(pill, contains('HomeGestures.islandDrawn'));
+      expect(pill, contains('SizedBox.shrink'));
+      final shade = File('lib/features/morph/morph_shade.dart').readAsStringSync();
+      expect(shade, contains('hasTransport'));
+      expect(shade, contains('skip_previous'));
+    });
+  });
+
+  test('overlay chrome uses the same easier sidebar and no upmost steal', () {
+    final kt = File(
+      'android/app/src/main/kotlin/com/zibashu/morphos/MorphChromeService.kt',
+    ).readAsStringSync();
+    expect(kt, contains('SIDEBAR_HIT_W_DP = 32'));
+    expect(kt, contains('SIDEBAR_HIT_H_DP = 128'));
+    expect(kt, contains('inwardSwipe'));
+    expect(kt, contains('STATUS_BAR_BAND_DP'));
+    expect(kt, contains('ISLAND_TOP_INSET_DP'));
+    expect(kt, contains('kind == "idle"'));
+    expect(kt, contains('never covers the OEM'));
+    expect(kt, contains('Do not add a MATCH_PARENT'));
+    expect(kt, isNot(contains('MATCH_PARENT, dp(28)')));
+    expect(kt, isNot(contains('lp.y = dp(8)')));
+    final qs = File(
+      'android/app/src/main/kotlin/com/zibashu/morphos/MorphQs.kt',
+    ).readAsStringSync();
+    expect(qs, contains('METADATA_KEY_DISPLAY_TITLE'));
+    expect(qs, contains('Now playing'));
+    expect(qs, contains('mediaHint'));
+    expect(
+      File('lib/features/home/home_screen.dart').readAsStringSync(),
+      contains('IslandActivity.fromNativeSnapshot'),
+    );
   });
 
   group('app appearance', () {

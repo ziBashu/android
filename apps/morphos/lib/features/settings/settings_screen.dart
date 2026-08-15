@@ -351,7 +351,7 @@ class SettingsScreen extends StatelessWidget {
                 title: Text('Sidebar', style: TextStyle(color: p.ink)),
                 subtitle: Text(
                   c.chromeFlags.sidebar
-                      ? 'Edge line expands to quick-enter apps'
+                      ? 'Rim nub — tap or swipe inward to open'
                       : 'System — Morph sidebar off',
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),
@@ -364,7 +364,7 @@ class SettingsScreen extends StatelessWidget {
                 title: Text('Notification bar', style: TextStyle(color: p.ink)),
                 subtitle: Text(
                   c.chromeFlags.notificationBar
-                      ? 'Swipe down for the Morph control center'
+                      ? 'Pull just below the status bar for Morph shade. The very top edge stays the system shade.'
                       : 'System — Morph notification bar off',
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),
@@ -377,7 +377,7 @@ class SettingsScreen extends StatelessWidget {
                 title: Text('Smart Island', style: TextStyle(color: p.ink)),
                 subtitle: Text(
                   c.chromeFlags.smartIsland
-                      ? 'Tiny top pill for what is happening now'
+                      ? 'Shows only while something is happening. Does not replace the system island.'
                       : 'System — Morph island off',
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),

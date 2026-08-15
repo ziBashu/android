@@ -27,11 +27,14 @@ class SmartIslandPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!HomeGestures.islandDrawn(activity)) {
+      return const SizedBox.shrink();
+    }
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.deferToChild,
       onTap: onTap,
       onVerticalDragEnd: (d) {
-        if ((d.primaryVelocity ?? 0) > 280) {
+        if ((d.primaryVelocity ?? 0) > HomeGestures.shadePullVelocity) {
           onPullDown?.call();
         }
       },
@@ -40,11 +43,10 @@ class SmartIslandPill extends StatelessWidget {
   }
 
   Widget _compact() {
-    final live = !activity.isIdle;
     return Center(
       child: Container(
-        width: live ? 220 : HomeGestures.islandIdleWidth,
-        height: HomeGestures.islandIdleHeight,
+        width: HomeGestures.islandLiveWidth,
+        height: HomeGestures.islandLiveHeight,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.88),
@@ -52,63 +54,21 @@ class SmartIslandPill extends StatelessWidget {
           border: Border.all(color: Colors.white24),
         ),
         alignment: Alignment.center,
-        child: live
-            ? Text(
-                activity.compactLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              )
-            : const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.circle, size: 8, color: Colors.white70),
-                  SizedBox(width: 8),
-                  Icon(Icons.graphic_eq, size: 14, color: Colors.white54),
-                ],
-              ),
+        child: Text(
+          activity.compactLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }
 
   Widget _expanded() {
-    if (activity.isIdle) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(26),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Nothing happening right now',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (onOpenShade != null)
-                  TextButton(
-                    onPressed: onOpenShade,
-                    child: const Text('Control center'),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 340),
@@ -174,6 +134,11 @@ class SmartIslandPill extends StatelessWidget {
                   ),
                 ),
               ],
+              if (onOpenShade != null)
+                TextButton(
+                  onPressed: onOpenShade,
+                  child: const Text('Control center'),
+                ),
             ],
           ),
         ),

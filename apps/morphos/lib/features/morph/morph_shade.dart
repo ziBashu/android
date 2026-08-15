@@ -13,6 +13,7 @@ Future<void> showMorphShade(
   required Future<ShadeSnapshot> Function() refresh,
   required Future<void> Function(ShadeTileId id) onToggle,
   required Future<void> Function(double value) onBrightness,
+  Future<void> Function(String command)? onMediaCommand,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -30,6 +31,7 @@ Future<void> showMorphShade(
             refresh: refresh,
             onToggle: onToggle,
             onBrightness: onBrightness,
+            onMediaCommand: onMediaCommand,
           ),
         ),
       );
@@ -53,6 +55,7 @@ class _MorphShadeSheet extends StatefulWidget {
     required this.refresh,
     required this.onToggle,
     required this.onBrightness,
+    this.onMediaCommand,
   });
 
   final MorphController controller;
@@ -60,6 +63,7 @@ class _MorphShadeSheet extends StatefulWidget {
   final Future<ShadeSnapshot> Function() refresh;
   final Future<void> Function(ShadeTileId id) onToggle;
   final Future<void> Function(double value) onBrightness;
+  final Future<void> Function(String command)? onMediaCommand;
 
   @override
   State<_MorphShadeSheet> createState() => _MorphShadeSheetState();
@@ -255,6 +259,61 @@ class _MorphShadeSheetState extends State<_MorphShadeSheet> {
                               _snap.media!.artist,
                               style: const TextStyle(color: Colors.white70),
                             ),
+                          if (_snap.media!.hasTransport) ...[
+                            Slider(
+                              value: _snap.media!.progress.clamp(0, 1),
+                              onChanged: widget.onMediaCommand == null
+                                  ? null
+                                  : (v) async {
+                                      setState(() {
+                                        _snap = _snap.copyWith(
+                                          media: ShadeMedia(
+                                            title: _snap.media!.title,
+                                            artist: _snap.media!.artist,
+                                            playing: _snap.media!.playing,
+                                            progress: v,
+                                          ),
+                                        );
+                                      });
+                                      await widget.onMediaCommand!('seek:$v');
+                                    },
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconButton(
+                                  onPressed: widget.onMediaCommand == null
+                                      ? null
+                                      : () => widget.onMediaCommand!('previous'),
+                                  icon: const Icon(
+                                    Icons.skip_previous,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: widget.onMediaCommand == null
+                                      ? null
+                                      : () => widget.onMediaCommand!('pause'),
+                                  icon: Icon(
+                                    _snap.media!.playing
+                                        ? Icons.pause
+                                        : Icons.play_arrow,
+                                    color: Colors.white,
+                                    size: 32,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: widget.onMediaCommand == null
+                                      ? null
+                                      : () => widget.onMediaCommand!('next'),
+                                  icon: const Icon(
+                                    Icons.skip_next,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

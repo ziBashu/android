@@ -112,24 +112,8 @@ object MorphQs {
 
     fun islandSnapshot(context: Context): Map<String, Any?> {
         val media = activeMedia(context)
-        if (media != null) {
-            val md = media.metadata
-            val title = md?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE).orEmpty()
-            val artist = md?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
-            val dur = md?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-            val pos = media.playbackState?.position ?: 0L
-            val playing = media.playbackState?.state ==
-                android.media.session.PlaybackState.STATE_PLAYING
-            return mapOf(
-                "kind" to "music",
-                "title" to title.ifBlank { if (playing) "Now playing" else "Music" },
-                "subtitle" to artist,
-                "playing" to playing,
-                "progress" to if (dur > 0) pos.toDouble() / dur else 0.0,
-                "expanded" to false,
-                "elapsedLabel" to "",
-            )
-        }
+        if (media != null) return sessionToIsland(media)
+        MorphNotificationStore.mediaHint()?.let { return it }
         val note = MorphNotificationStore.islandHint()
         if (note != null) return note
         val musicOn = try {
@@ -396,28 +380,65 @@ object MorphQs {
         }
     }
 
-    private fun activeMedia(context: Context): MediaController? {
+    private fun activeSessions(context: Context): List<MediaController> {
         val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         val listener = android.content.ComponentName(context, MorphNotificationListener::class.java)
-        return try {
-            msm.getActiveSessions(listener).firstOrNull()
+        val listed = try {
+            msm.getActiveSessions(listener)
         } catch (_: Exception) {
             try {
-                msm.getActiveSessions(null).firstOrNull()
+                msm.getActiveSessions(null)
             } catch (_: Exception) {
-                null
+                emptyList()
             }
         }
+        return listed
+    }
+
+    private fun activeMedia(context: Context): MediaController? {
+        val list = activeSessions(context)
+        return list.firstOrNull {
+            it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
+        } ?: list.firstOrNull {
+            it.playbackState?.state == android.media.session.PlaybackState.STATE_BUFFERING
+        } ?: list.firstOrNull { it.metadata != null } ?: list.firstOrNull()
+    }
+
+    private fun sessionToIsland(ctrl: MediaController): Map<String, Any?> {
+        val md = ctrl.metadata
+        val title = listOf(
+            md?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_TITLE),
+            md?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE),
+            md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM),
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+        val artist = listOf(
+            md?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST),
+            md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST),
+            md?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE),
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+        val dur = md?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val pos = ctrl.playbackState?.position ?: 0L
+        val playing = ctrl.playbackState?.state ==
+            android.media.session.PlaybackState.STATE_PLAYING
+        return mapOf(
+            "kind" to "music",
+            "title" to title.ifBlank { if (playing) "Now playing" else "Music" },
+            "subtitle" to artist,
+            "playing" to playing,
+            "progress" to if (dur > 0) pos.toDouble() / dur else 0.0,
+            "expanded" to false,
+            "elapsedLabel" to "",
+        )
     }
 
     private fun media(context: Context): Map<String, Any?>? {
-        val c = activeMedia(context) ?: return null
-        val title = c.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE).orEmpty()
-        if (title.isBlank()) return null
+        val island = islandSnapshot(context)
+        if (island["kind"] != "music") return null
         return mapOf(
-            "title" to title,
-            "artist" to (c.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST) ?: ""),
-            "playing" to (c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING),
+            "title" to island["title"],
+            "artist" to island["subtitle"],
+            "playing" to island["playing"],
+            "progress" to island["progress"],
         )
     }
 
