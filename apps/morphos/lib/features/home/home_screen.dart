@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/adaptive_engine.dart';
 import '../../core/app_catalog.dart';
+import '../../core/home_gestures.dart';
 import '../../core/home_nav.dart';
 import '../../core/home_occupancy.dart';
 import '../../core/launcher_listing.dart';
@@ -24,7 +25,6 @@ import '../../widgets/morph_background.dart';
 import '../../widgets/sidebar_edge.dart';
 import '../../widgets/smart_island_pill.dart';
 import '../drawer/app_search_sheet.dart';
-import '../morph/control_center.dart';
 import '../morph/morph_shade.dart';
 import '../settings/settings_screen.dart';
 import 'app_library_page.dart';
@@ -671,10 +671,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onVerticalDragEnd: (d) {
                 final v = d.primaryVelocity ?? 0;
                 if (v > 500) {
-                  if (c.chromeFlags.notificationBar) {
+                  if (HomeGestures.interceptSwipeDown(
+                    notificationBar: c.chromeFlags.notificationBar,
+                  )) {
                     unawaited(_openShade());
-                  } else {
-                    showMorphControlCenter(context, c);
                   }
                 } else if (v < -500) {
                   _openQuickSearch();
@@ -909,7 +909,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       showMinus: _editing,
       selected: _selectedIds.contains(app.id),
       onTap: () => _launchApp(app),
-      onLongPress: () => _minusOn(app),
+      onLongPress: HomeGestures.iconLongPressEnabled(editing: _editing)
+          ? () => _minusOn(app)
+          : null,
       onMinus: () => _minusOn(app),
     );
     if (!_editing) return tile;
@@ -931,7 +933,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _openFolder(folder),
-        onLongPress: () => _enterEdit(),
+        onLongPress: HomeGestures.iconLongPressEnabled(editing: _editing)
+            ? () => _enterEdit()
+            : null,
         borderRadius: BorderRadius.circular(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

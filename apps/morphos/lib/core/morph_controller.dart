@@ -423,10 +423,7 @@ class MorphController extends ChangeNotifier {
         await applyPlatformChrome();
         await _syncKeepAwake();
         await _clearStaleForcedRotationOnce();
-        await SystemMorphBridge.syncChrome({
-          ...chromeFlags.toJson(),
-          'shortcuts': sidebar.shortcutIds,
-        });
+        await SystemMorphBridge.syncChrome(chromeSyncPayload());
       } catch (_) {}
     });
   }
@@ -628,11 +625,14 @@ class MorphController extends ChangeNotifier {
   Future<void> moveHomeWidget(int from, int to) =>
       applyOccupancy(occupancy.moveWidget(from, to).copyWith(seeded: true));
 
+  /// Payload sent to the overlay service. Tests drive this.
+  Map<String, dynamic> chromeSyncPayload() => chromeFlags.toSyncJson(sidebar);
+
   Future<void> setChromeFlags(MorphChromeFlags flags) async {
     chromeFlags = flags;
     await _persist();
     notifyListeners();
-    unawaited(SystemMorphBridge.syncChrome(flags.toJson()));
+    unawaited(SystemMorphBridge.syncChrome(chromeSyncPayload()));
   }
 
   Future<void> setChromeLayer(MorphChromeLayer layer, bool on) =>
@@ -642,12 +642,7 @@ class MorphController extends ChangeNotifier {
     sidebar = next;
     await _persist();
     notifyListeners();
-    unawaited(
-      SystemMorphBridge.syncChrome({
-        ...chromeFlags.toJson(),
-        'shortcuts': next.shortcutIds,
-      }),
-    );
+    unawaited(SystemMorphBridge.syncChrome(chromeSyncPayload()));
   }
 
   Future<void> applyAppearance(AppAppearanceStore next) async {

@@ -55,6 +55,13 @@ class MorphChromeFlags {
         'smartIsland': smartIsland,
       };
 
+  /// Overlay sync payload. Always includes shortcuts so a flag flip
+  /// cannot wipe the native sidebar list.
+  Map<String, dynamic> toSyncJson(SidebarStrip strip) => {
+        ...toJson(),
+        'shortcuts': List<String>.from(strip.shortcutIds),
+      };
+
   static MorphChromeFlags fromJson(Map<String, dynamic>? m) {
     if (m == null) return const MorphChromeFlags();
     return MorphChromeFlags(

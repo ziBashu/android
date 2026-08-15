@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:morphos/core/app_appearance.dart';
 import 'package:morphos/core/chrome_flags.dart';
+import 'package:morphos/core/home_gestures.dart';
 import 'package:morphos/core/home_occupancy.dart';
 import 'package:morphos/core/morph_controller.dart';
 import 'package:morphos/core/shade_tiles.dart';
@@ -188,6 +189,56 @@ void main() {
       flags = flags.setEnabled(MorphChromeLayer.smartIsland, false);
       expect(flags.usesSystemIsland, isTrue);
       expect(flags.notificationBar, isFalse);
+    });
+
+    test('chrome sync payload keeps shortcuts when a flag flips', () async {
+      const strip = SidebarStrip(shortcutIds: ['chrome', 'camera']);
+      final payload = const MorphChromeFlags(smartIsland: false).toSyncJson(strip);
+      expect(payload['shortcuts'], ['chrome', 'camera']);
+      expect(payload['smartIsland'], isFalse);
+      expect(payload['sidebar'], isTrue);
+      expect(payload['notificationBar'], isTrue);
+
+      final c = MorphController();
+      await c.load();
+      await c.setSidebar(const SidebarStrip(shortcutIds: ['chrome', 'maps']));
+      expect(c.chromeSyncPayload()['shortcuts'], ['chrome', 'maps']);
+      await c.setChromeLayer(MorphChromeLayer.notificationBar, false);
+      expect(c.chromeFlags.notificationBar, isFalse);
+      expect(c.chromeSyncPayload()['shortcuts'], ['chrome', 'maps']);
+      expect(c.chromeSyncPayload()['notificationBar'], isFalse);
+      expect(
+        File('lib/core/morph_controller.dart').readAsStringSync(),
+        contains('syncChrome(chromeSyncPayload())'),
+      );
+      expect(
+        File('lib/core/morph_controller.dart').readAsStringSync(),
+        isNot(contains('syncChrome(flags.toJson())')),
+      );
+    });
+  });
+
+  group('home gestures', () {
+    test('edit mode disables icon long-press so drag can start', () {
+      expect(HomeGestures.iconLongPressEnabled(editing: false), isTrue);
+      expect(HomeGestures.iconLongPressEnabled(editing: true), isFalse);
+      final home = File('lib/features/home/home_screen.dart').readAsStringSync();
+      expect(home, contains('HomeGestures.iconLongPressEnabled'));
+      expect(home, contains('LongPressDraggable<int>'));
+    });
+
+    test('swipe-down intercepts only when Morph notification bar is on', () {
+      expect(
+        HomeGestures.interceptSwipeDown(notificationBar: true),
+        isTrue,
+      );
+      expect(
+        HomeGestures.interceptSwipeDown(notificationBar: false),
+        isFalse,
+      );
+      final home = File('lib/features/home/home_screen.dart').readAsStringSync();
+      expect(home, contains('HomeGestures.interceptSwipeDown'));
+      expect(home, isNot(contains('showMorphControlCenter')));
     });
   });
 
