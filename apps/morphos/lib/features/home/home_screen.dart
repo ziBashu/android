@@ -573,6 +573,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await showCustomizeMenu(
       context: context,
       controller: c,
+      onAddSidebar: () => showSidebarAppSheet(
+        context: context,
+        controller: c,
+        apps: _allAppsIncludingHidden,
+      ),
       onAddApp: () => showAddAppSheet(
         context: context,
         controller: c,
@@ -667,19 +672,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             },
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onLongPress: _enterEdit,
-              onVerticalDragEnd: (d) {
-                final v = d.primaryVelocity ?? 0;
-                if (v > 500) {
-                  if (HomeGestures.interceptSwipeDown(
-                    notificationBar: c.chromeFlags.notificationBar,
-                  )) {
-                    unawaited(_openShade());
-                  }
-                } else if (v < -500) {
-                  _openQuickSearch();
-                }
-              },
+              onLongPress: HomeGestures.parentWallpaperLongPress(
+                editing: _editing,
+                selecting: _selecting,
+              )
+                  ? _enterEdit
+                  : null,
               child: PageView(
                 controller: _pages,
                 children: [
@@ -707,26 +705,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           Column(
             children: [
-              if (c.chromeFlags.smartIsland)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6, bottom: 4),
-                  child: SmartIslandPill(
-                    activity: _island,
-                    onTap: _toggleIsland,
-                    onSeek: (v) {
-                      setState(() => _island = _island.copyWith(progress: v));
-                      unawaited(SystemMorphBridge.islandCommand('seek:$v'));
-                    },
-                    onPrevious: () =>
-                        unawaited(SystemMorphBridge.islandCommand('previous')),
-                    onPause: () =>
-                        unawaited(SystemMorphBridge.islandCommand('pause')),
-                    onNext: () =>
-                        unawaited(SystemMorphBridge.islandCommand('next')),
-                  ),
-                )
-              else
-                const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 4),
+                child: _topChrome(),
+              ),
               if (_selecting)
                 _selectBar()
               else if (_editing)
@@ -766,6 +748,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               Expanded(
                 child: GridView.builder(
+                  physics: HomeGestures.gridScrollEnabled(editing: _editing)
+                      ? const AlwaysScrollableScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: c.gridColumns.clamp(3, 5),
@@ -832,10 +817,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               controller: c,
               apps: _allAppsIncludingHidden,
               onOpen: (app) => _launchApp(app, fromLibrary: true),
+              onAdd: () => showSidebarAppSheet(
+                context: context,
+                controller: c,
+                apps: _allAppsIncludingHidden,
+              ),
             ),
         ],
       ),
     );
+  }
+
+  Widget _topChrome() {
+    if (c.chromeFlags.smartIsland) {
+      return SmartIslandPill(
+        activity: _island,
+        onTap: _toggleIsland,
+        onPullDown: c.chromeFlags.notificationBar
+            ? () => unawaited(_openShade())
+            : null,
+        onOpenShade: c.chromeFlags.notificationBar
+            ? () => unawaited(_openShade())
+            : null,
+        onSeek: (v) {
+          setState(() => _island = _island.copyWith(progress: v));
+          unawaited(SystemMorphBridge.islandCommand('seek:$v'));
+        },
+        onPrevious: () =>
+            unawaited(SystemMorphBridge.islandCommand('previous')),
+        onPause: () => unawaited(SystemMorphBridge.islandCommand('pause')),
+        onNext: () => unawaited(SystemMorphBridge.islandCommand('next')),
+      );
+    }
+    if (c.chromeFlags.notificationBar) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => unawaited(_openShade()),
+        onVerticalDragEnd: (d) {
+          if (HomeGestures.openShadeFromTopPull(
+            notificationBar: true,
+            primaryVelocity: d.primaryVelocity ?? 0,
+          )) {
+            unawaited(_openShade());
+          }
+        },
+        child: Center(
+          child: Container(
+            width: 48,
+            height: 6,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox(height: 8);
   }
 
   Widget _selectBar() {
@@ -908,6 +946,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       controller: c,
       showMinus: _editing,
       selected: _selectedIds.contains(app.id),
+      ignoreInnerGestures: _editing,
       onTap: () => _launchApp(app),
       onLongPress: HomeGestures.iconLongPressEnabled(editing: _editing)
           ? () => _minusOn(app)

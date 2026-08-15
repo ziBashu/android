@@ -16,7 +16,7 @@
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Personal adaptive environment — global home launcher, productivity widgets, morph packs. |
-| Version | **`1.2.1+16`** |
+| Version | **`1.2.2+17`** |
 | Launcher icon | Custom ziBashu brand mark (`assets/brand/morphos_launcher_1024.png`) — not Flutter default |
 
 ## Product identity
@@ -96,9 +96,9 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 - [x] Custom MorphOS launcher icon (ziBashu forest/cream + brand mark)
 - [x] Demo/offline when device APIs fail
 - [x] analyze / unit tests / harden_check
-- [x] Warehub upload **v1.2.1** — https://zibashu4.com/hub/warehub/morphos
+- [x] Warehub upload **v1.2.2** — https://zibashu4.com/hub/warehub/morphos
 - [x] Dual signed release (upload keystore): warehub APK + Play AAB in `dist/`
-- [ ] Play Console upload (AAB ready at `dist/morphos-v1.2.1-play.aab`; Internal track when requested)
+- [ ] Play Console upload (AAB ready at `dist/morphos-v1.2.2-play.aab`; Internal track when requested)
 
 ## References
 

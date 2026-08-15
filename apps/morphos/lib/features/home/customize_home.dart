@@ -15,6 +15,7 @@ Future<void> showCustomizeMenu({
   required VoidCallback onClearPage,
   required VoidCallback onToggleDock,
   VoidCallback? onAddApp,
+  VoidCallback? onAddSidebar,
 }) async {
   final p = controller.palette;
   await showModalBottomSheet<void>(
@@ -36,6 +37,16 @@ Future<void> showCustomizeMenu({
                 onTap: () {
                   Navigator.pop(ctx);
                   onAddApp();
+                },
+              ),
+            if (onAddSidebar != null)
+              ListTile(
+                leading: const Icon(Icons.view_sidebar_outlined),
+                title: const Text('Add sidebar app'),
+                subtitle: const Text('Short edge strip — not a full side frame'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onAddSidebar();
                 },
               ),
             ListTile(
@@ -466,6 +477,91 @@ Future<String?> showAppPlacementSheet({
             ),
           ],
         ),
+      );
+    },
+  );
+}
+
+Future<void> showSidebarAppSheet({
+  required BuildContext context,
+  required MorphController controller,
+  required List<MorphAppItem> apps,
+}) async {
+  final p = controller.palette;
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: p.panel,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      var q = '';
+      return StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final taken = controller.sidebar.shortcutIds.toSet();
+          final ranked = apps.where((a) {
+            if (taken.contains(a.id) ||
+                (a.packageName != null && taken.contains(a.packageName))) {
+              return false;
+            }
+            if (q.trim().isEmpty) return true;
+            final needle = q.toLowerCase();
+            return controller.labelFor(a).toLowerCase().contains(needle) ||
+                a.id.toLowerCase().contains(needle);
+          }).toList();
+          return SizedBox(
+            height: MediaQuery.sizeOf(ctx).height * 0.72,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Add sidebar app',
+                    style: TextStyle(
+                      color: p.ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    autofocus: true,
+                    style: TextStyle(color: p.ink),
+                    decoration: const InputDecoration(
+                      hintText: 'Filter apps',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (v) => setLocal(() => q = v),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: ranked.length,
+                    itemBuilder: (_, i) {
+                      final app = ranked[i];
+                      return ListTile(
+                        leading: Icon(app.icon, color: p.accent),
+                        title: Text(
+                          controller.labelFor(app),
+                          style: TextStyle(color: p.ink),
+                        ),
+                        onTap: () async {
+                          await controller.setSidebar(
+                            controller.sidebar.add(app.id),
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       );
     },
   );

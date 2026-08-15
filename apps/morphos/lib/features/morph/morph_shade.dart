@@ -13,18 +13,33 @@ Future<void> showMorphShade(
   required Future<void> Function(ShadeTileId id) onToggle,
   required Future<void> Function(double value) onBrightness,
 }) {
-  return showModalBottomSheet<void>(
+  return showGeneralDialog<void>(
     context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
+    barrierDismissible: true,
+    barrierLabel: 'Morph shade',
     barrierColor: Colors.black54,
-    builder: (ctx) {
-      return _MorphShadeSheet(
-        controller: controller,
-        initial: snapshot,
-        refresh: refresh,
-        onToggle: onToggle,
-        onBrightness: onBrightness,
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (ctx, _, __) {
+      return SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: _MorphShadeSheet(
+            controller: controller,
+            initial: snapshot,
+            refresh: refresh,
+            onToggle: onToggle,
+            onBrightness: onBrightness,
+          ),
+        ),
+      );
+    },
+    transitionBuilder: (ctx, anim, _, child) {
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -1),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+        child: child,
       );
     },
   );

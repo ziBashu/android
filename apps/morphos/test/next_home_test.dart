@@ -222,8 +222,19 @@ void main() {
     test('edit mode disables icon long-press so drag can start', () {
       expect(HomeGestures.iconLongPressEnabled(editing: false), isTrue);
       expect(HomeGestures.iconLongPressEnabled(editing: true), isFalse);
+      expect(
+        HomeGestures.parentWallpaperLongPress(editing: true, selecting: false),
+        isFalse,
+      );
+      expect(
+        HomeGestures.gridScrollEnabled(editing: true),
+        isFalse,
+      );
       final home = File('lib/features/home/home_screen.dart').readAsStringSync();
       expect(home, contains('HomeGestures.iconLongPressEnabled'));
+      expect(home, contains('HomeGestures.parentWallpaperLongPress'));
+      expect(home, contains('NeverScrollableScrollPhysics'));
+      expect(home, contains('ignoreInnerGestures'));
       expect(home, contains('LongPressDraggable<int>'));
     });
 
@@ -236,9 +247,46 @@ void main() {
         HomeGestures.interceptSwipeDown(notificationBar: false),
         isFalse,
       );
+      expect(
+        HomeGestures.openShadeFromTopPull(
+          notificationBar: true,
+          primaryVelocity: 400,
+        ),
+        isTrue,
+      );
+      expect(
+        HomeGestures.openShadeFromTopPull(
+          notificationBar: false,
+          primaryVelocity: 400,
+        ),
+        isFalse,
+      );
       final home = File('lib/features/home/home_screen.dart').readAsStringSync();
-      expect(home, contains('HomeGestures.interceptSwipeDown'));
+      expect(home, contains('HomeGestures.openShadeFromTopPull'));
+      expect(home, contains('_topChrome'));
+      expect(home, contains('SmartIslandPill'));
       expect(home, isNot(contains('showMorphControlCenter')));
+      expect(
+        File('lib/features/morph/morph_shade.dart').readAsStringSync(),
+        contains('showGeneralDialog'),
+      );
+      expect(
+        File('lib/features/morph/morph_shade.dart').readAsStringSync(),
+        contains('Alignment.topCenter'),
+      );
+    });
+
+    test('sidebar handle is a short line and can add apps', () {
+      expect(HomeGestures.sidebarHandleHeight, lessThan(140));
+      expect(HomeGestures.sidebarHandleWidth, lessThan(12));
+      expect(HomeGestures.islandIdleHeight, greaterThanOrEqualTo(32));
+      final side = File('lib/widgets/sidebar_edge.dart').readAsStringSync();
+      expect(side, contains('HomeGestures.sidebarHandleHeight'));
+      expect(side, contains('onAdd'));
+      expect(side, contains('Add app'));
+      expect(side, isNot(contains('double.infinity')));
+      final home = File('lib/features/home/home_screen.dart').readAsStringSync();
+      expect(home, contains('showSidebarAppSheet'));
     });
   });
 
@@ -304,6 +352,7 @@ void main() {
       expect(music.expandControls, containsAll(['seek', 'previous', 'pause', 'next']));
       expect(IslandActivity.musicTransport, contains('seek'));
       expect(IslandActivity.idle.expand().isIdle, isTrue);
+      expect(IslandActivity.idle.expand().expanded, isTrue);
     });
   });
 

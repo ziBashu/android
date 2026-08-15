@@ -20,6 +20,7 @@ class AppIconTile extends StatelessWidget {
     this.selected = false,
     this.sizeOverride,
     this.forceHideLabel = false,
+    this.ignoreInnerGestures = false,
   });
 
   final MorphAppItem app;
@@ -33,6 +34,7 @@ class AppIconTile extends StatelessWidget {
   final bool selected;
   final double? sizeOverride;
   final bool forceHideLabel;
+  final bool ignoreInnerGestures;
 
   MorphPalette get p => controller.palette;
 
@@ -81,13 +83,7 @@ class AppIconTile extends StatelessWidget {
       iconChild = Icon(app.icon, color: Colors.white, size: size * 0.46);
     }
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
+    final visual = Padding(
           padding: EdgeInsets.symmetric(
             horizontal: 2,
             vertical: compact ? 2 : 4,
@@ -194,7 +190,16 @@ class AppIconTile extends StatelessWidget {
               ],
             ],
           ),
-        ),
+        );
+
+    if (ignoreInnerGestures) return visual;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(16),
+        child: visual,
       ),
     );
   }

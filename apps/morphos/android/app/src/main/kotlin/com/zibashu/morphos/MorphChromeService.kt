@@ -122,11 +122,11 @@ class MorphChromeService : Service() {
     private fun ensureIsland() {
         if (island != null) return
         val pill = TextView(this).apply {
-            text = "●"
+            text = "●   Now"
             setTextColor(Color.WHITE)
-            textSize = 10f
-            setPadding(22, 6, 22, 6)
-            setBackgroundColor(0xCC000000.toInt())
+            textSize = 13f
+            setPadding(28, 10, 28, 10)
+            setBackgroundColor(0xE6000000.toInt())
             setOnClickListener { bringHome("island") }
         }
         island = pill

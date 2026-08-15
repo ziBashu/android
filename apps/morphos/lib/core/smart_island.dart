@@ -59,10 +59,7 @@ class IslandActivity {
   }
 
   IslandActivity compact() => copyWith(expanded: false);
-  IslandActivity expand() {
-    if (kind == IslandKind.idle) return this;
-    return copyWith(expanded: true);
-  }
+  IslandActivity expand() => copyWith(expanded: true);
 
   IslandActivity copyWith({
     IslandKind? kind,

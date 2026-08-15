@@ -1,7 +1,7 @@
 name: morphos
 description: MorphOS — personal adaptive environment layer; shapes, spaces, intelligence, morph packs.
 publish_to: none
-version: 1.2.1+16
+version: 1.2.2+17
 
 environment:
   sdk: ^3.5.0
