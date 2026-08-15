@@ -15,14 +15,14 @@ KEY = str(Path.home() / ".ssh" / "id_ed25519")
 SITE = "/www/wwwroot/ziBashu4.com"
 
 ANDROID_ROOT = Path.home() / "ANDROID"
-APK_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.4-warehub.apk"
-AAB_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.4-play.aab"
+APK_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.5-warehub.apk"
+AAB_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.5-play.aab"
 ICON_LOCAL = (
     ANDROID_ROOT / "apps" / "morphos" / "assets" / "brand" / "morphos_launcher_1024.png"
 )
 
-VERSION_NAME = "1.2.4"
-VERSION_CODE = 19
+VERSION_NAME = "1.2.5"
+VERSION_CODE = 20
 SLUG = "morphos"
 PACKAGE = "com.zibashu.morphos"
 
@@ -117,8 +117,8 @@ def main() -> None:
         "platforms": platforms,
         "changelog": (
             f"v{VERSION_NAME}: Easier rim sidebar, idle Smart Island occupies no space, "
-            "live media title + transport, Morph shade only from the lower-upper pull "
-            "(status-bar edge stays the system shade)."
+            "live media title + transport, island stays above the Morph shade pull, "
+            "status-bar edge stays the system shade."
         ),
         "tags": ["offline", "launcher", "home", "tools"],
         "is_featured": 1,

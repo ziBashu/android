@@ -12,6 +12,7 @@ import 'package:morphos/core/shade_tiles.dart';
 import 'package:morphos/core/smart_island.dart';
 import 'package:morphos/features/home/home_screen.dart';
 import 'package:morphos/main.dart';
+import 'package:morphos/widgets/smart_island_pill.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -634,6 +635,52 @@ void main() {
     await tester.pump();
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('live island tap expands above the morph shade pull',
+      (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.padding = const FakeViewPadding(top: 40);
+    addTearDown(tester.view.reset);
+
+    SharedPreferences.setMockInitialValues({});
+    final c = MorphController();
+    await c.load();
+    expect(c.chromeFlags.notificationBar, isTrue);
+    expect(c.chromeFlags.smartIsland, isTrue);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          controller: c,
+          initialIsland: IslandActivity.music(
+            title: 'Midnight City',
+            artist: 'M83',
+            playing: true,
+            progress: 0.3,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final homeSrc =
+        File('lib/features/home/home_screen.dart').readAsStringSync();
+    expect(
+      homeSrc.indexOf('_islandPill()'),
+      greaterThan(homeSrc.indexOf('_MorphShadePull(')),
+    );
+
+    expect(find.byType(SmartIslandPill), findsOneWidget);
+    expect(find.byIcon(Icons.skip_next), findsNothing);
+
+    await tester.tap(find.byType(SmartIslandPill));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.skip_next), findsOneWidget);
+    expect(find.byIcon(Icons.skip_previous), findsOneWidget);
+    expect(find.byIcon(Icons.pause), findsOneWidget);
   });
 
   testWidgets('MorphOSApp pumps without error', (tester) async {

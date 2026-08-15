@@ -36,9 +36,18 @@ import 'icon_minus_sheet.dart';
 import 'set_home_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.controller});
+  const HomeScreen({
+    super.key,
+    required this.controller,
+    this.initialIsland,
+  });
 
   final MorphController controller;
+
+  /// Seed a live activity so tests (and overlays) can show the island
+  /// before the native snapshot arrives. Empty native snapshots do not
+  /// overwrite this.
+  final IslandActivity? initialIsland;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -55,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _selecting = false;
   final Set<String> _selectedIds = {};
   Timer? _islandTick;
-  IslandActivity _island = IslandActivity.idle;
+  late IslandActivity _island;
   StreamSubscription<Map<String, dynamic>>? _batteryLiveSub;
   StreamSubscription<Map<String, dynamic>>? _chromeSub;
   BatterySnapshot _batterySnap = const BatterySnapshot(
@@ -70,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _island = widget.initialIsland ?? IslandActivity.idle;
     WidgetsBinding.instance.addObserver(this);
     HardwareKeyboard.instance.addHandler(_onKey);
     c.addListener(_onController);
@@ -770,6 +780,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onMorph: () => unawaited(_openShade()),
               ),
             ),
+          if (c.chromeFlags.smartIsland && HomeGestures.islandDrawn(_island))
+            Positioned(
+              top: MediaQuery.paddingOf(context).top,
+              left: 0,
+              right: 0,
+              child: _islandPill(),
+            ),
           if (c.chromeFlags.sidebar)
             SidebarEdge(
               controller: c,
@@ -787,30 +804,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _topChrome() {
+    // Reserve live height only. The tappable pill is stacked *above*
+    // _MorphShadePull so media transport is not stolen by the shade band.
     if (c.chromeFlags.smartIsland && HomeGestures.islandDrawn(_island)) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 4, bottom: 4),
-        child: SmartIslandPill(
-          activity: _island,
-          onTap: _toggleIsland,
-          onPullDown: c.chromeFlags.notificationBar
-              ? () => unawaited(_openShade())
-              : null,
-          onOpenShade: c.chromeFlags.notificationBar
-              ? () => unawaited(_openShade())
-              : null,
-          onSeek: (v) {
-            setState(() => _island = _island.copyWith(progress: v));
-            unawaited(SystemMorphBridge.islandCommand('seek:$v'));
-          },
-          onPrevious: () =>
-              unawaited(SystemMorphBridge.islandCommand('previous')),
-          onPause: () => unawaited(SystemMorphBridge.islandCommand('pause')),
-          onNext: () => unawaited(SystemMorphBridge.islandCommand('next')),
-        ),
-      );
+      return SizedBox(height: HomeGestures.islandOccupancyHeight(_island) + 8);
     }
     return const SizedBox.shrink();
+  }
+
+  Widget _islandPill() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: SmartIslandPill(
+        activity: _island,
+        onTap: _toggleIsland,
+        onPullDown: c.chromeFlags.notificationBar
+            ? () => unawaited(_openShade())
+            : null,
+        onOpenShade: c.chromeFlags.notificationBar
+            ? () => unawaited(_openShade())
+            : null,
+        onSeek: (v) {
+          setState(() => _island = _island.copyWith(progress: v));
+          unawaited(SystemMorphBridge.islandCommand('seek:$v'));
+        },
+        onPrevious: () =>
+            unawaited(SystemMorphBridge.islandCommand('previous')),
+        onPause: () => unawaited(SystemMorphBridge.islandCommand('pause')),
+        onNext: () => unawaited(SystemMorphBridge.islandCommand('next')),
+      ),
+    );
   }
 
   Widget _selectBar() {
