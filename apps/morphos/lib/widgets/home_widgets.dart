@@ -548,37 +548,68 @@ class WeatherHomeWidget extends StatelessWidget {
   }
 }
 
-class SmallSearchPill extends StatelessWidget {
-  const SmallSearchPill({super.key, required this.onTap});
+/// Dock search: tiny nub → bubble → search. No dock: tiny bubble that expands.
+class SmallSearchPill extends StatefulWidget {
+  const SmallSearchPill({
+    super.key,
+    required this.onTap,
+    this.dockVisible = true,
+  });
 
   final VoidCallback onTap;
+  final bool dockVisible;
+
+  @override
+  State<SmallSearchPill> createState() => _SmallSearchPillState();
+}
+
+class _SmallSearchPillState extends State<SmallSearchPill> {
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
+    if (!_open) {
+      return GestureDetector(
+        onTap: () => setState(() => _open = true),
+        child: Center(
+          child: widget.dockVisible
+              ? Container(
+                  width: 42,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(10),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.28),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white54),
+                  ),
+                  child: const Icon(Icons.search, size: 12, color: Colors.white),
+                ),
+        ),
+      );
+    }
     return Center(
       child: Material(
-        color: Colors.black.withValues(alpha: 0.32),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
         child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.search, size: 16, color: Colors.white),
-                SizedBox(width: 6),
-                Text(
-                  'Search',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+          customBorder: const CircleBorder(),
+          onTap: () {
+            setState(() => _open = false);
+            widget.onTap();
+          },
+          child: const SizedBox(
+            width: 52,
+            height: 52,
+            child: Icon(Icons.search, color: Colors.white, size: 22),
           ),
         ),
       ),

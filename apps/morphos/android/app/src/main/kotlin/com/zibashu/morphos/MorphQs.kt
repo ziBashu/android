@@ -120,20 +120,35 @@ object MorphQs {
             val pos = media.playbackState?.position ?: 0L
             val playing = media.playbackState?.state ==
                 android.media.session.PlaybackState.STATE_PLAYING
-            if (title.isNotBlank()) {
-                return mapOf(
-                    "kind" to "music",
-                    "title" to title,
-                    "subtitle" to artist,
-                    "playing" to playing,
-                    "progress" to if (dur > 0) pos.toDouble() / dur else 0.0,
-                    "expanded" to false,
-                    "elapsedLabel" to "",
-                )
-            }
+            return mapOf(
+                "kind" to "music",
+                "title" to title.ifBlank { if (playing) "Now playing" else "Music" },
+                "subtitle" to artist,
+                "playing" to playing,
+                "progress" to if (dur > 0) pos.toDouble() / dur else 0.0,
+                "expanded" to false,
+                "elapsedLabel" to "",
+            )
         }
         val note = MorphNotificationStore.islandHint()
         if (note != null) return note
+        val musicOn = try {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            am.isMusicActive
+        } catch (_: Exception) {
+            false
+        }
+        if (musicOn) {
+            return mapOf(
+                "kind" to "music",
+                "title" to "Now playing",
+                "subtitle" to "",
+                "playing" to true,
+                "progress" to 0.0,
+                "expanded" to false,
+                "elapsedLabel" to "",
+            )
+        }
         return mapOf(
             "kind" to "idle",
             "title" to "",
@@ -382,12 +397,16 @@ object MorphQs {
     }
 
     private fun activeMedia(context: Context): MediaController? {
+        val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+        val listener = android.content.ComponentName(context, MorphNotificationListener::class.java)
         return try {
-            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-            val listener = android.content.ComponentName(context, MorphNotificationListener::class.java)
             msm.getActiveSessions(listener).firstOrNull()
         } catch (_: Exception) {
-            null
+            try {
+                msm.getActiveSessions(null).firstOrNull()
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 

@@ -607,7 +607,8 @@ void main() {
     expect(home.contains('_buildClock'), isFalse);
     expect(home.contains('fromLibrary: true'), isTrue);
     expect(home.contains('showAddAppSheet'), isTrue);
-    expect(home.contains('ClockHomeWidget'), isFalse);
+    expect(home.contains('HomeMixedGrid'), isTrue);
+    expect(home.contains('ClockHomeWidget'), isTrue);
 
     expect(customize.contains('Add Widget'), isTrue);
     expect(customize.contains('Add App'), isTrue);

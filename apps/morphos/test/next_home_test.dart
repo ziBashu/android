@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:morphos/core/app_appearance.dart';
 import 'package:morphos/core/chrome_flags.dart';
 import 'package:morphos/core/home_gestures.dart';
+import 'package:morphos/core/home_grid_pack.dart';
 import 'package:morphos/core/home_occupancy.dart';
 import 'package:morphos/core/morph_controller.dart';
 import 'package:morphos/core/shade_tiles.dart';
@@ -171,6 +172,20 @@ void main() {
         [HomeWidgetKind.weather, HomeWidgetKind.clock],
       );
     });
+
+    test('widgets occupy multiple app cells and live on the board', () {
+      expect(HomeWidgetKind.clock.colSpan, greaterThan(1));
+      expect(HomeWidgetKind.clock.rowSpan, greaterThan(1));
+      expect(HomeWidgetKind.weather.colSpan, 2);
+      expect(HomeWidgetKind.weather.rowSpan, 2);
+      const empty = HomeOccupancy(homeIds: ['mail'], dockIds: [], seeded: true);
+      final withClock = empty.addWidget(HomeWidgetKind.clock);
+      expect(withClock.homeIds, contains(HomeWidgetKind.clock.slotId));
+      final packed = HomeGridPack.pack(withClock.homeIds, 4);
+      final clockCell = packed.firstWhere((c) => c.id == HomeWidgetKind.clock.slotId);
+      expect(clockCell.cellCount, greaterThanOrEqualTo(4));
+      expect(clockCell.colSpan * clockCell.rowSpan, HomeWidgetKind.clock.colSpan.clamp(1, 4) * HomeWidgetKind.clock.rowSpan);
+    });
   });
 
   group('chrome flags', () {
@@ -233,9 +248,14 @@ void main() {
       final home = File('lib/features/home/home_screen.dart').readAsStringSync();
       expect(home, contains('HomeGestures.iconLongPressEnabled'));
       expect(home, contains('HomeGestures.parentWallpaperLongPress'));
-      expect(home, contains('NeverScrollableScrollPhysics'));
+      expect(
+        File('lib/widgets/home_mixed_grid.dart').readAsStringSync(),
+        contains('NeverScrollableScrollPhysics'),
+      );
       expect(home, contains('ignoreInnerGestures'));
-      expect(home, contains('LongPressDraggable<int>'));
+      expect(home, contains('HomeMixedGrid'));
+      expect(home, isNot(contains('Rotation locked')));
+      expect(home, contains('dockVisible: c.dockVisible'));
     });
 
     test('swipe-down intercepts only when Morph notification bar is on', () {
@@ -277,8 +297,10 @@ void main() {
     });
 
     test('sidebar handle is a short line and can add apps', () {
-      expect(HomeGestures.sidebarHandleHeight, lessThan(140));
+      expect(HomeGestures.sidebarHandleHeight, lessThan(50));
       expect(HomeGestures.sidebarHandleWidth, lessThan(12));
+      final snapped = SidebarPlacement.fromPoint(10, 200, 400, 800);
+      expect(snapped.rim, ScreenRim.left);
       expect(HomeGestures.islandIdleHeight, greaterThanOrEqualTo(32));
       final side = File('lib/widgets/sidebar_edge.dart').readAsStringSync();
       expect(side, contains('HomeGestures.sidebarHandleHeight'));

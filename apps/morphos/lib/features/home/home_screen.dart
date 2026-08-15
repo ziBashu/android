@@ -19,6 +19,7 @@ import '../../core/system_morph_bridge.dart';
 import '../../core/weather_service.dart';
 import '../../widgets/app_icon_tile.dart';
 import '../../widgets/glass_dock.dart';
+import '../../widgets/home_mixed_grid.dart';
 import '../../widgets/home_widgets.dart';
 import '../../widgets/launcher_setup_banner.dart';
 import '../../widgets/morph_background.dart';
@@ -26,6 +27,7 @@ import '../../widgets/sidebar_edge.dart';
 import '../../widgets/smart_island_pill.dart';
 import '../drawer/app_search_sheet.dart';
 import '../morph/morph_shade.dart';
+import '../notes/notes_screen.dart';
 import '../settings/settings_screen.dart';
 import 'app_library_page.dart';
 import 'customize_home.dart';
@@ -52,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _editing = false;
   bool _selecting = false;
   final Set<String> _selectedIds = {};
-  bool _showRotateLock = false;
+  Timer? _islandTick;
   IslandActivity _island = IslandActivity.idle;
   StreamSubscription<Map<String, dynamic>>? _batteryLiveSub;
   StreamSubscription<Map<String, dynamic>>? _chromeSub;
@@ -107,11 +109,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       unawaited(SystemMorphBridge.setHomeVisible(true));
       unawaited(_refreshIsland());
+      _islandTick?.cancel();
+      _islandTick = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(_refreshIsland());
+      });
     });
   }
 
   @override
   void dispose() {
+    _islandTick?.cancel();
     _batteryLiveSub?.cancel();
     _chromeSub?.cancel();
     c.removeListener(_onController);
@@ -553,9 +560,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     control = control.slideRotate();
     await c.setRotationControl(control);
-    if (mounted) {
-      setState(() => _showRotateLock = true);
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _toggleRotateLock() async {
@@ -565,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         locked: !c.rotationLocked,
       ),
     );
-    if (mounted) setState(() => _showRotateLock = c.rotationLocked);
+    if (mounted) setState(() {});
   }
 
   Future<void> _enterEdit() async {
@@ -729,84 +734,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   width: double.infinity,
                   child: ColoredBox(color: Color(0x33FFFFFF)),
                 ),
-              if (c.homeWidgets.isNotEmpty)
-                HomeWidgetStrip(
-                  controller: c,
-                  kinds: c.homeWidgets,
-                  battery: _batterySnap,
-                  notes: _notes,
-                  onSearch: _openQuickSearch,
-                  onRotate: _cycleRotation,
-                  onLockRotate: _toggleRotateLock,
-                  onWebSearch: _webSearch,
-                  weather: _weather,
-                  weatherBusy: _weatherBusy,
-                  browserLabel: _browserLabel,
-                  onRefreshWeather: _refreshWeather,
-                  editing: _editing,
-                  onReorder: (from, to) => c.moveHomeWidget(from, to),
-                ),
               Expanded(
-                child: GridView.builder(
-                  physics: HomeGestures.gridScrollEnabled(editing: _editing)
-                      ? const AlwaysScrollableScrollPhysics()
-                      : const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: c.gridColumns.clamp(3, 5),
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: c.showLabels ? 0.78 : 1.0,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: HomeMixedGrid(
+                    slots: slots,
+                    columns: c.gridColumns.clamp(3, 5),
+                    aspect: c.showLabels ? 0.78 : 1.0,
+                    editing: _editing,
+                    onMove: (from, to) => c.moveHomeSlot(from, to),
+                    trailing: _editing ? _addAppTile() : null,
+                    itemBuilder: (id, i) => _homeSlot(id, i),
                   ),
-                  itemCount: slots.length + (_editing ? 1 : 0),
-                  itemBuilder: (context, i) {
-                    if (_editing && i == slots.length) {
-                      return _addAppTile();
-                    }
-                    return _homeSlot(slots[i], i);
-                  },
                 ),
               ),
-              if (_showRotateLock || c.rotationLocked)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Material(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      onTap: _toggleRotateLock,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              c.rotationLocked ? Icons.lock : Icons.lock_open,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              c.rotationLocked
-                                  ? 'Rotation locked'
-                                  : 'Lock rotation',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              SmallSearchPill(onTap: _openQuickSearch),
+              SmallSearchPill(
+                onTap: _openQuickSearch,
+                dockVisible: c.dockVisible,
+              ),
               const SizedBox(height: 10),
               if (c.dockVisible) _buildDock(dock),
               const SizedBox(height: 8),
@@ -920,6 +865,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _homeSlot(String raw, int index) {
+    final widgetKind = HomeWidgetKindX.ofSlot(raw);
+    if (widgetKind != null) {
+      return _widgetCell(widgetKind);
+    }
     if (raw.isEmpty) {
       final voidCell = const SizedBox.expand();
       if (!_editing) return voidCell;
@@ -1142,7 +1091,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final raw = await SystemMorphBridge.getIslandSnapshot();
       if (raw.isEmpty) return;
       final next = IslandActivity.fromJson(raw);
-      if (mounted) setState(() => _island = next.compact());
+      if (mounted) {
+        setState(() => _island = next.copyWith(expanded: _island.expanded));
+      }
     } catch (_) {}
   }
 
@@ -1150,6 +1101,77 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _island = _island.expanded ? _island.compact() : _island.expand();
     });
+  }
+
+  Widget _widgetCell(HomeWidgetKind kind) {
+    final child = switch (kind) {
+      HomeWidgetKind.clock => const ClockHomeWidget(),
+      HomeWidgetKind.battery => BatteryHomeWidget(
+          snapshot: _batterySnap,
+          onTap: () {},
+        ),
+      HomeWidgetKind.rotate => RotateHomeWidget(
+          control: RotationControl(
+            action: c.rotationAction,
+            locked: c.rotationLocked,
+          ),
+          onCycle: _cycleRotation,
+          onLock: _toggleRotateLock,
+        ),
+      HomeWidgetKind.search => SearchHomeWidget(onTap: _openQuickSearch),
+      HomeWidgetKind.notes => NotesHomeWidget(
+          store: _notes,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => NotesScreen(controller: c, store: _notes),
+              ),
+            );
+          },
+        ),
+      HomeWidgetKind.webSearch => WebSearchHomeWidget(
+          browserLabel: _browserLabel,
+          onSubmit: _webSearch,
+        ),
+      HomeWidgetKind.weather => WeatherHomeWidget(
+          snapshot: _weather,
+          busy: _weatherBusy,
+          onTap: _refreshWeather,
+        ),
+    };
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: FittedBox(fit: BoxFit.contain, alignment: Alignment.centerLeft, child: child),
+        ),
+        if (_editing)
+          Positioned(
+            left: 0,
+            top: 0,
+            child: GestureDetector(
+              onTap: () => c.removeHomeWidget(kind),
+              child: Container(
+                width: 18,
+                height: 18,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFB0B8C4),
+                  shape: BoxShape.circle,
+                ),
+                child: const Text(
+                  '-',
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _addAppTile() {

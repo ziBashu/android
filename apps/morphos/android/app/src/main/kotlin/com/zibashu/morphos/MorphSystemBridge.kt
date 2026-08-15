@@ -231,11 +231,20 @@ class MorphSystemBridge(
                 val sidebar = call.argument<Boolean>("sidebar") ?: true
                 val shade = call.argument<Boolean>("notificationBar") ?: true
                 val island = call.argument<Boolean>("smartIsland") ?: true
-                @Suppress("UNCHECKED_CAST")
+                val rim = call.argument<String>("rim") ?: "right"
+                val along = (call.argument<Number>("along") ?: 0.42).toDouble()
                 val shortcuts = (call.argument<List<Any?>>("shortcuts")
                     ?: emptyList())
                     .mapNotNull { it?.toString() }
-                MorphChromeService.sync(context, sidebar, shade, island, shortcuts)
+                MorphChromeService.sync(
+                    context,
+                    sidebar,
+                    shade,
+                    island,
+                    shortcuts,
+                    rim,
+                    along,
+                )
                 result.success(true)
             }
             "setHomeVisible" -> {

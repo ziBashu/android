@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/chrome_flags.dart';
 import '../core/home_gestures.dart';
 import '../core/models.dart';
 import '../core/morph_controller.dart';
@@ -40,69 +41,94 @@ class _SidebarEdgeState extends State<SidebarEdge> {
     return apps;
   }
 
+  void _moveTo(Offset global, Size screen) {
+    final next = SidebarPlacement.fromPoint(global.dx, global.dy, screen.width, screen.height);
+    widget.controller.setSidebar(widget.controller.sidebar.withPlacement(next));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final place = widget.controller.sidebar.placement;
     final apps = _apps;
-    final openH = (72.0 + apps.length * 58.0 + 56.0).clamp(160.0, 420.0);
-    return Align(
-      alignment: Alignment.centerRight,
-      child: GestureDetector(
-        onTap: () => setState(() => _open = !_open),
-        onHorizontalDragUpdate: (d) {
-          if (d.delta.dx < -4 && !_open) setState(() => _open = true);
-          if (d.delta.dx > 4 && _open) setState(() => _open = false);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: _open
-              ? HomeGestures.sidebarExpandedWidth
-              : HomeGestures.sidebarHandleWidth,
-          height: _open ? openH : HomeGestures.sidebarHandleHeight,
-          margin: const EdgeInsets.only(right: 2),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: _open ? 0.18 : 0.62),
-            borderRadius: BorderRadius.circular(_open ? 22 : 99),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 8,
+    final openH = (64.0 + apps.length * 54.0 + 48.0).clamp(120.0, 360.0);
+    final w = _open ? HomeGestures.sidebarExpandedWidth : HomeGestures.sidebarHandleWidth;
+    final h = _open
+        ? (place.rim == ScreenRim.top || place.rim == ScreenRim.bottom
+            ? HomeGestures.sidebarHandleHeight
+            : openH)
+        : (place.rim == ScreenRim.top || place.rim == ScreenRim.bottom
+            ? HomeGestures.sidebarHandleWidth
+            : HomeGestures.sidebarHandleHeight);
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final ox = switch (place.rim) {
+          ScreenRim.left => 2.0,
+          ScreenRim.right => box.maxWidth - w - 2,
+          ScreenRim.top => place.along * (box.maxWidth - w),
+          ScreenRim.bottom => place.along * (box.maxWidth - w),
+        };
+        final oy = switch (place.rim) {
+          ScreenRim.left => place.along * (box.maxHeight - h),
+          ScreenRim.right => place.along * (box.maxHeight - h),
+          ScreenRim.top => 2.0,
+          ScreenRim.bottom => box.maxHeight - h - 2,
+        };
+        return Stack(
+          children: [
+            Positioned(
+              left: ox,
+              top: oy,
+              width: w,
+              height: h,
+              child: GestureDetector(
+                onTap: () => setState(() => _open = !_open),
+                onLongPressMoveUpdate: (d) =>
+                    _moveTo(d.globalPosition, Size(box.maxWidth, box.maxHeight)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: _open ? 0.18 : 0.7),
+                    borderRadius: BorderRadius.circular(_open ? 20 : 99),
+                  ),
+                  child: _open
+                      ? ListView(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          children: [
+                            for (final app in apps)
+                              AppIconTile(
+                                app: app,
+                                controller: widget.controller,
+                                compact: true,
+                                showLabel: false,
+                                onTap: () {
+                                  widget.onOpen(app);
+                                  setState(() => _open = false);
+                                },
+                                onLongPress: () async {
+                                  await widget.controller.setSidebar(
+                                    widget.controller.sidebar.remove(app.id),
+                                  );
+                                  if (mounted) setState(() {});
+                                },
+                              ),
+                            IconButton(
+                              tooltip: 'Add app',
+                              onPressed: () {
+                                setState(() => _open = false);
+                                widget.onAdd();
+                              },
+                              icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.expand(),
+                ),
               ),
-            ],
-          ),
-          child: _open
-              ? ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  children: [
-                    for (final app in apps)
-                      AppIconTile(
-                        app: app,
-                        controller: widget.controller,
-                        compact: true,
-                        showLabel: false,
-                        onTap: () {
-                          widget.onOpen(app);
-                          setState(() => _open = false);
-                        },
-                        onLongPress: () async {
-                          await widget.controller.setSidebar(
-                            widget.controller.sidebar.remove(app.id),
-                          );
-                          if (mounted) setState(() {});
-                        },
-                      ),
-                    IconButton(
-                      tooltip: 'Add app',
-                      onPressed: () {
-                        setState(() => _open = false);
-                        widget.onAdd();
-                      },
-                      icon: const Icon(Icons.add, color: Colors.white),
-                    ),
-                  ],
-                )
-              : const SizedBox.expand(),
-        ),
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

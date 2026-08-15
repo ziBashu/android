@@ -5,10 +5,10 @@ library;
 class HomeGestures {
   HomeGestures._();
 
-  /// Short MIUI-style handle — not a full-height side frame.
-  static const sidebarHandleWidth = 6.0;
-  static const sidebarHandleHeight = 88.0;
-  static const sidebarExpandedWidth = 72.0;
+  /// Tiny rim handle — not a full-height side frame.
+  static const sidebarHandleWidth = 5.0;
+  static const sidebarHandleHeight = 36.0;
+  static const sidebarExpandedWidth = 68.0;
 
   /// Always-visible island capsule (idle is a pill, not a 10px speck).
   static const islandIdleWidth = 128.0;

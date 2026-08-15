@@ -10,25 +10,36 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * Overlay chrome when MorphOS is not the visible home surface.
- * Stops intercepting when the matching flag is off or overlay is denied.
+ * Sidebar handle stays on the screen rim and works over other apps.
  */
 class MorphChromeService : Service() {
     private var wm: WindowManager? = null
     private var sidebar: View? = null
-    private var island: View? = null
+    private var island: TextView? = null
     private var shadeHandle: View? = null
+    private var expanded: LinearLayout? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val islandTick = object : Runnable {
+        override fun run() {
+            refreshIsland()
+            handler.postDelayed(this, 1500)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -36,6 +47,7 @@ class MorphChromeService : Service() {
         super.onCreate()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         startAsForeground()
+        handler.post(islandTick)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -44,6 +56,7 @@ class MorphChromeService : Service() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(islandTick)
         removeAll()
         super.onDestroy()
     }
@@ -66,16 +79,25 @@ class MorphChromeService : Service() {
             intent.getStringExtra(EXTRA_SHORTCUTS)?.let {
                 prefs.edit().putString(KEY_SHORTCUTS, it).apply()
             }
+            intent.getStringExtra(EXTRA_RIM)?.let {
+                prefs.edit().putString(KEY_RIM, it).apply()
+            }
+            if (intent.hasExtra(EXTRA_ALONG)) {
+                prefs.edit().putFloat(KEY_ALONG, intent.getDoubleExtra(EXTRA_ALONG, 0.42).toFloat()).apply()
+            }
         }
         val sidebarOn = prefs.getBoolean(KEY_SIDEBAR, true)
         val shadeOn = prefs.getBoolean(KEY_SHADE, true)
         val islandOn = prefs.getBoolean(KEY_ISLAND, true)
         val homeVisible = prefs.getBoolean(KEY_HOME, false)
-        if (!Settings.canDrawOverlays(this) || homeVisible || (!sidebarOn && !shadeOn && !islandOn)) {
+        if (!Settings.canDrawOverlays(this) || (!sidebarOn && !shadeOn && !islandOn)) {
             removeAll()
-            if (!sidebarOn && !shadeOn && !islandOn) {
-                stopSelf()
-            }
+            if (!sidebarOn && !shadeOn && !islandOn) stopSelf()
+            return
+        }
+        // Flutter draws chrome on MorphOS home; overlay is for other apps.
+        if (homeVisible) {
+            removeAll()
             return
         }
         if (sidebarOn) ensureSidebar() else remove(sidebar).also { sidebar = null }
@@ -84,16 +106,110 @@ class MorphChromeService : Service() {
     }
 
     private fun ensureSidebar() {
-        if (sidebar != null) return
+        if (sidebar != null) {
+            updateSidebarLp()
+            return
+        }
         val line = View(this).apply {
-            setBackgroundColor(0x99FFFFFF.toInt())
-            setOnClickListener { expandSidebar() }
+            setBackgroundColor(0xB3FFFFFF.toInt())
+            setOnTouchListener(HandleTouch())
         }
         sidebar = line
-        add(line, edgeParams())
+        add(line, handleLp())
     }
 
-    private fun expandSidebar() {
+    private inner class HandleTouch : View.OnTouchListener {
+        private var downX = 0f
+        private var downY = 0f
+        private var moved = false
+
+        override fun onTouch(v: View, ev: MotionEvent): Boolean {
+            when (ev.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = ev.rawX
+                    downY = ev.rawY
+                    moved = false
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (kotlin.math.abs(ev.rawX - downX) > 12 || kotlin.math.abs(ev.rawY - downY) > 12) {
+                        moved = true
+                        persistPoint(ev.rawX, ev.rawY)
+                        updateSidebarLp()
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) toggleExpanded()
+                    return true
+                }
+            }
+            return false
+        }
+    }
+
+    private fun persistPoint(x: Float, y: Float) {
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels.toFloat()
+        val h = dm.heightPixels.toFloat()
+        val dl = x
+        val dr = w - x
+        val dt = y
+        val db = h - y
+        val m = minOf(dl, dr, dt, db)
+        val rim = when (m) {
+            dl -> "left"
+            dr -> "right"
+            dt -> "top"
+            else -> "bottom"
+        }
+        val along = when (rim) {
+            "left", "right" -> (y / h).coerceIn(0.08f, 0.92f)
+            else -> (x / w).coerceIn(0.08f, 0.92f)
+        }
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_RIM, rim)
+            .putFloat(KEY_ALONG, along)
+            .apply()
+    }
+
+    private fun handleLp(): WindowManager.LayoutParams {
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val rim = prefs.getString(KEY_RIM, "right") ?: "right"
+        val along = prefs.getFloat(KEY_ALONG, 0.42f)
+        val vertical = rim == "left" || rim == "right"
+        val lp = baseParams(if (vertical) dp(5) else dp(36), if (vertical) dp(36) else dp(5))
+        lp.gravity = when (rim) {
+            "left" -> Gravity.START or Gravity.TOP
+            "right" -> Gravity.END or Gravity.TOP
+            "top" -> Gravity.TOP or Gravity.START
+            else -> Gravity.BOTTOM or Gravity.START
+        }
+        val dm = resources.displayMetrics
+        if (vertical) {
+            lp.y = (along * (dm.heightPixels - dp(36))).toInt()
+            lp.x = dp(2)
+        } else {
+            lp.x = (along * (dm.widthPixels - dp(36))).toInt()
+            lp.y = dp(2)
+        }
+        return lp
+    }
+
+    private fun updateSidebarLp() {
+        val v = sidebar ?: return
+        try {
+            wm?.updateViewLayout(v, handleLp())
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun toggleExpanded() {
+        if (expanded != null) {
+            remove(expanded)
+            expanded = null
+            return
+        }
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = prefs.getString(KEY_SHORTCUTS, "[]") ?: "[]"
         val ids = try {
@@ -102,30 +218,54 @@ class MorphChromeService : Service() {
         } catch (_: Exception) {
             emptyList()
         }
-        if (ids.isEmpty()) {
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xE61A1A1A.toInt())
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+        }
+        val pm = packageManager
+        for (id in ids.take(10)) {
+            val launch = pm.getLaunchIntentForPackage(id) ?: continue
+            val iv = ImageView(this)
+            try {
+                iv.setImageDrawable(pm.getApplicationIcon(id))
+            } catch (_: Exception) {
+            }
+            val lp = LinearLayout.LayoutParams(dp(40), dp(40))
+            lp.bottomMargin = dp(8)
+            iv.setOnClickListener {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(launch)
+                toggleExpanded()
+            }
+            col.addView(iv, lp)
+        }
+        if (col.childCount == 0) {
             bringHome("sidebar")
             return
         }
-        val pkg = ids.first()
-        try {
-            val launch = packageManager.getLaunchIntentForPackage(pkg)
-            if (launch != null) {
-                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(launch)
-                return
-            }
-        } catch (_: Exception) {
+        expanded = col
+        val rim = prefs.getString(KEY_RIM, "right") ?: "right"
+        val along = prefs.getFloat(KEY_ALONG, 0.42f)
+        val lp = baseParams(dp(56), WindowManager.LayoutParams.WRAP_CONTENT)
+        lp.gravity = when (rim) {
+            "left" -> Gravity.START or Gravity.TOP
+            else -> Gravity.END or Gravity.TOP
         }
-        bringHome("sidebar")
+        lp.y = (along * resources.displayMetrics.heightPixels).toInt()
+        lp.x = dp(10)
+        add(col, lp)
     }
 
     private fun ensureIsland() {
-        if (island != null) return
+        if (island != null) {
+            refreshIsland()
+            return
+        }
         val pill = TextView(this).apply {
-            text = "●   Now"
             setTextColor(Color.WHITE)
-            textSize = 13f
-            setPadding(28, 10, 28, 10)
+            textSize = 12f
+            setPadding(dp(16), dp(8), dp(16), dp(8))
             setBackgroundColor(0xE6000000.toInt())
             setOnClickListener { bringHome("island") }
         }
@@ -135,8 +275,17 @@ class MorphChromeService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
         )
         lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        lp.y = 8
+        lp.y = dp(8)
         add(pill, lp)
+        refreshIsland()
+    }
+
+    private fun refreshIsland() {
+        val pill = island ?: return
+        val snap = MorphQs.islandSnapshot(this)
+        val kind = snap["kind"]?.toString() ?: "idle"
+        val title = snap["title"]?.toString().orEmpty()
+        pill.text = if (kind == "idle") "●" else title.ifBlank { kind }
     }
 
     private fun ensureShadeHandle() {
@@ -163,12 +312,6 @@ class MorphChromeService : Service() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra("morph_chrome", reason)
         startActivity(intent)
-    }
-
-    private fun edgeParams(): WindowManager.LayoutParams {
-        val lp = baseParams(dp(8), dp(160))
-        lp.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        return lp
     }
 
     private fun baseParams(w: Int, h: Int): WindowManager.LayoutParams {
@@ -207,6 +350,7 @@ class MorphChromeService : Service() {
         remove(sidebar); sidebar = null
         remove(island); island = null
         remove(shadeHandle); shadeHandle = null
+        remove(expanded); expanded = null
     }
 
     private fun startAsForeground() {
@@ -252,18 +396,32 @@ class MorphChromeService : Service() {
         const val KEY_ISLAND = "island"
         const val KEY_HOME = "home"
         const val KEY_SHORTCUTS = "shortcuts"
+        const val KEY_RIM = "rim"
+        const val KEY_ALONG = "along"
         const val EXTRA_SIDEBAR = "sidebar"
         const val EXTRA_SHADE = "shade"
         const val EXTRA_ISLAND = "island"
         const val EXTRA_HOME = "home"
         const val EXTRA_SHORTCUTS = "shortcuts"
+        const val EXTRA_RIM = "rim"
+        const val EXTRA_ALONG = "along"
 
-        fun sync(context: Context, sidebar: Boolean, shade: Boolean, island: Boolean, shortcuts: List<String>) {
+        fun sync(
+            context: Context,
+            sidebar: Boolean,
+            shade: Boolean,
+            island: Boolean,
+            shortcuts: List<String>,
+            rim: String = "right",
+            along: Double = 0.42,
+        ) {
             val intent = Intent(context, MorphChromeService::class.java)
                 .putExtra(EXTRA_SIDEBAR, sidebar)
                 .putExtra(EXTRA_SHADE, shade)
                 .putExtra(EXTRA_ISLAND, island)
                 .putExtra(EXTRA_SHORTCUTS, JSONArray(shortcuts).toString())
+                .putExtra(EXTRA_RIM, rim)
+                .putExtra(EXTRA_ALONG, along)
             ContextCompatStart.start(context, intent)
         }
 

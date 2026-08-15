@@ -39,6 +39,38 @@ extension HomeWidgetKindX on HomeWidgetKind {
 
   bool get isWide =>
       this == HomeWidgetKind.clock || this == HomeWidgetKind.webSearch;
+
+  static const slotPrefix = 'widget:';
+
+  String get slotId => '$slotPrefix$name';
+
+  /// How many app-icon cells this widget occupies.
+  int get colSpan => switch (this) {
+        HomeWidgetKind.clock => 4,
+        HomeWidgetKind.webSearch => 4,
+        HomeWidgetKind.weather => 2,
+        HomeWidgetKind.battery => 2,
+        HomeWidgetKind.notes => 2,
+        HomeWidgetKind.rotate => 1,
+        HomeWidgetKind.search => 1,
+      };
+
+  int get rowSpan => switch (this) {
+        HomeWidgetKind.clock => 2,
+        HomeWidgetKind.weather => 2,
+        _ => 1,
+      };
+
+  static bool isSlot(String raw) => raw.startsWith(slotPrefix);
+
+  static HomeWidgetKind? ofSlot(String raw) {
+    if (!isSlot(raw)) return null;
+    final name = raw.substring(slotPrefix.length);
+    for (final k in HomeWidgetKind.values) {
+      if (k.name == name) return k;
+    }
+    return null;
+  }
 }
 
 /// Named folder occupying one home slot (`folder:<id>`).
@@ -465,13 +497,19 @@ class HomeOccupancy {
   }
 
   HomeOccupancy addWidget(HomeWidgetKind kind) {
-    if (widgets.contains(kind)) return this;
-    return copyWith(widgets: [...widgets, kind]);
+    if (widgets.contains(kind) || homeIds.contains(kind.slotId)) return this;
+    return copyWith(
+      widgets: [...widgets, kind],
+      homeIds: [...homeIds, kind.slotId],
+    );
   }
 
   HomeOccupancy removeWidget(HomeWidgetKind kind) {
     return copyWith(
       widgets: widgets.where((w) => w != kind).toList(growable: false),
+      homeIds: homeIds
+          .where((id) => id != kind.slotId)
+          .toList(growable: false),
     );
   }
 
@@ -505,8 +543,12 @@ class HomeOccupancy {
         parsedFolders.add(HomeFolder.fromJson(Map<String, dynamic>.from(e)));
       }
     }
+    var ids = List<String>.from(m['homeIds'] as List? ?? const []);
+    for (final k in kinds) {
+      if (!ids.contains(k.slotId)) ids = [...ids, k.slotId];
+    }
     return HomeOccupancy(
-      homeIds: List<String>.from(m['homeIds'] as List? ?? const []),
+      homeIds: ids,
       dockIds: List<String>.from(m['dockIds'] as List? ?? const []),
       dockVisible: m['dockVisible'] as bool? ?? true,
       widgets: kinds,
