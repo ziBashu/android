@@ -213,18 +213,64 @@ class IslandActivity {
 
   /// Native overlay / MediaSession snapshot → live activity.
   /// Music with a blank title still becomes a shown Now playing row.
+  /// A snapshot that is playing but forgot `kind` is still music.
   static IslandActivity fromNativeSnapshot(Map<String, dynamic>? m) {
     if (m == null || m.isEmpty) return idle;
     final parsed = fromJson(m);
-    if (parsed.kind == IslandKind.music) {
+    final playing = parsed.playing || m['playing'] == true;
+    if (parsed.kind == IslandKind.music ||
+        (parsed.kind == IslandKind.idle && playing)) {
       return music(
         title: parsed.title,
         artist: parsed.subtitle,
-        playing: parsed.playing,
+        playing: playing,
         progress: parsed.progress,
         expanded: parsed.expanded,
       );
     }
     return parsed;
   }
+
+  /// Stable identity for "did what is happening change?" — ignores progress.
+  String get signature => '${kind.name}|$title|$subtitle|$playing';
+}
+
+/// Compact / peek / auto-shrink policy. HomeScreen and tests call this.
+class IslandPresenter {
+  IslandPresenter._();
+
+  static const autoShrinkMs = 2800;
+
+  static IslandTick apply({
+    required IslandActivity previous,
+    required IslandActivity incoming,
+  }) {
+    if (incoming.isIdle) {
+      return const IslandTick(activity: IslandActivity.idle, restartShrink: false);
+    }
+    final changed = previous.signature != incoming.signature;
+    if (changed) {
+      return IslandTick(activity: incoming.expand(), restartShrink: true);
+    }
+    return IslandTick(
+      activity: incoming.copyWith(expanded: previous.expanded),
+      restartShrink: false,
+    );
+  }
+
+  static bool shouldAutoShrink({
+    required IslandActivity activity,
+    required int elapsedMs,
+  }) =>
+      !activity.isIdle && activity.expanded && elapsedMs >= autoShrinkMs;
+}
+
+class IslandTick {
+  const IslandTick({
+    required this.activity,
+    required this.restartShrink,
+  });
+
+  final IslandActivity activity;
+  final bool restartShrink;
 }

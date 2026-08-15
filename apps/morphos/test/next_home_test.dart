@@ -461,6 +461,57 @@ void main() {
       expect(HomeGestures.overlayIslandShown(IslandActivity.idle), isFalse);
     });
 
+    test('auto-shrink after a peek; same track stays compact', () {
+      final incoming = IslandActivity.music(
+        title: 'Midnight City',
+        artist: 'M83',
+        playing: true,
+      );
+      final peek = IslandPresenter.apply(
+        previous: IslandActivity.idle,
+        incoming: incoming,
+      );
+      expect(peek.activity.isMusic, isTrue);
+      expect(peek.activity.expanded, isTrue);
+      expect(peek.restartShrink, isTrue);
+      expect(
+        IslandPresenter.shouldAutoShrink(
+          activity: peek.activity,
+          elapsedMs: IslandPresenter.autoShrinkMs,
+        ),
+        isTrue,
+      );
+      expect(
+        IslandPresenter.shouldAutoShrink(
+          activity: peek.activity,
+          elapsedMs: 400,
+        ),
+        isFalse,
+      );
+      final held = IslandPresenter.apply(
+        previous: peek.activity.compact(),
+        incoming: incoming.copyWith(progress: 0.5),
+      );
+      expect(held.activity.expanded, isFalse);
+      expect(held.restartShrink, isFalse);
+      final gone = IslandPresenter.apply(
+        previous: held.activity,
+        incoming: IslandActivity.idle,
+      );
+      expect(gone.activity.isIdle, isTrue);
+      expect(HomeGestures.islandOccupancyHeight(gone.activity), 0);
+      expect(HomeGestures.islandCompactHeight, lessThan(40));
+
+      final playingNoKind = IslandActivity.fromNativeSnapshot({
+        'kind': 'idle',
+        'title': '',
+        'playing': true,
+        'progress': 0,
+      });
+      expect(playingNoKind.isMusic, isTrue);
+      expect(playingNoKind.title, 'Now playing');
+    });
+
     test('native music snapshot maps to a shown activity and shade media row',
         () {
       final activity = IslandActivity.fromNativeSnapshot({
@@ -534,9 +585,19 @@ void main() {
     expect(qs, contains('METADATA_KEY_DISPLAY_TITLE'));
     expect(qs, contains('Now playing'));
     expect(qs, contains('mediaHint'));
+    expect(qs, contains('playingOnly'));
+    expect(qs, contains('audioPlaying'));
+    expect(
+      File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+      isNot(contains('conversations|alerting')),
+    );
+    expect(
+      File('lib/core/system_morph_bridge.dart').readAsStringSync(),
+      contains("invokeMethod<dynamic>('getIslandSnapshot')"),
+    );
     expect(
       File('lib/features/home/home_screen.dart').readAsStringSync(),
-      contains('IslandActivity.fromNativeSnapshot'),
+      contains('IslandPresenter.apply'),
     );
   });
 
@@ -681,6 +742,8 @@ void main() {
     expect(find.byIcon(Icons.skip_next), findsOneWidget);
     expect(find.byIcon(Icons.skip_previous), findsOneWidget);
     expect(find.byIcon(Icons.pause), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('MorphOSApp pumps without error', (tester) async {

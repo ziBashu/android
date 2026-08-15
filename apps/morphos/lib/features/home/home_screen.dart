@@ -64,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _selecting = false;
   final Set<String> _selectedIds = {};
   Timer? _islandTick;
+  Timer? _islandShrink;
   late IslandActivity _island;
   StreamSubscription<Map<String, dynamic>>? _batteryLiveSub;
   StreamSubscription<Map<String, dynamic>>? _chromeSub;
@@ -120,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       unawaited(SystemMorphBridge.setHomeVisible(true));
       unawaited(_refreshIsland());
       _islandTick?.cancel();
-      _islandTick = Timer.periodic(const Duration(seconds: 2), (_) {
+      _islandTick = Timer.periodic(const Duration(milliseconds: 800), (_) {
         unawaited(_refreshIsland());
       });
     });
@@ -129,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _islandTick?.cancel();
+    _islandShrink?.cancel();
     _batteryLiveSub?.cancel();
     _chromeSub?.cancel();
     c.removeListener(_onController);
@@ -1117,15 +1119,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final raw = await SystemMorphBridge.getIslandSnapshot();
       if (raw.isEmpty) return;
-      final next = IslandActivity.fromNativeSnapshot(raw);
-      if (mounted) {
-        setState(() {
-          _island = next.isIdle
-              ? IslandActivity.idle
-              : next.copyWith(expanded: _island.expanded && !next.isIdle);
-        });
-      }
+      final incoming = IslandActivity.fromNativeSnapshot(raw);
+      final tick = IslandPresenter.apply(
+        previous: _island,
+        incoming: incoming,
+      );
+      if (!mounted) return;
+      setState(() => _island = tick.activity);
+      if (tick.restartShrink) _armIslandShrink();
     } catch (_) {}
+  }
+
+  void _armIslandShrink() {
+    _islandShrink?.cancel();
+    _islandShrink = Timer(
+      const Duration(milliseconds: IslandPresenter.autoShrinkMs),
+      () {
+        if (!mounted) return;
+        if (IslandPresenter.shouldAutoShrink(
+          activity: _island,
+          elapsedMs: IslandPresenter.autoShrinkMs,
+        )) {
+          setState(() => _island = _island.compact());
+        }
+      },
+    );
   }
 
   void _toggleIsland() {
@@ -1133,6 +1151,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _island = _island.expanded ? _island.compact() : _island.expand();
     });
+    if (_island.expanded) _armIslandShrink();
   }
 
   Widget _widgetCell(HomeWidgetKind kind) {

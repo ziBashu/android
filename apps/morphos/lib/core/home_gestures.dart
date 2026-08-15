@@ -29,11 +29,13 @@ class HomeGestures {
   static const sidebarHitWidth = 32.0;
   static const sidebarHitHeight = 128.0;
 
-  /// Idle Morph island reserves no chrome. Live activities use the live size.
+  /// Idle Morph island reserves no chrome. Live compact is a short capsule.
   static const islandIdleWidth = 0.0;
   static const islandIdleHeight = 0.0;
-  static const islandLiveWidth = 220.0;
-  static const islandLiveHeight = 36.0;
+  static const islandCompactWidth = 126.0;
+  static const islandCompactHeight = 32.0;
+  static const islandLiveWidth = islandCompactWidth;
+  static const islandLiveHeight = islandCompactHeight;
 
   /// Overlay live island sits below the OEM cutout / Magic Capsule.
   static const islandOverlayTopInset = 56.0;

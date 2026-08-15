@@ -547,9 +547,13 @@ class SystemMorphBridge {
   static Future<Map<String, dynamic>> getIslandSnapshot() async {
     if (!isAndroid) return const {};
     try {
-      final raw =
-          await _channel.invokeMapMethod<String, dynamic>('getIslandSnapshot');
-      return raw ?? const {};
+      // invokeMethod, not invokeMapMethod — mixed Bool/Double maps from
+      // Kotlin have been dropped as {} by invokeMapMethod on some devices.
+      final raw = await _channel.invokeMethod<dynamic>('getIslandSnapshot');
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry('$k', v));
+      }
+      return const {};
     } catch (_) {
       return const {};
     }

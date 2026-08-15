@@ -5,16 +5,21 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.net.ConnectivityManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.telephony.TelephonyManager
+import java.util.HashMap
 
 
 /**
@@ -85,7 +90,7 @@ object MorphQs {
     }
 
     fun islandCommand(context: Context, command: String): Boolean {
-        val ctrl = activeMedia(context) ?: return false
+        val ctrl = activeMedia(context, playingOnly = false) ?: return false
         return try {
             when {
                 command == "pause" -> {
@@ -110,37 +115,38 @@ object MorphQs {
         }
     }
 
-    fun islandSnapshot(context: Context): Map<String, Any?> {
-        val media = activeMedia(context)
+    fun islandSnapshot(context: Context): HashMap<String, Any> {
+        MorphIslandWatch.ensure(context)
+        val media = activeMedia(context, playingOnly = true)
         if (media != null) return sessionToIsland(media)
-        MorphNotificationStore.mediaHint()?.let { return it }
+        MorphNotificationStore.mediaHint()?.let { return hashIsland(it) }
         val note = MorphNotificationStore.islandHint()
-        if (note != null) return note
-        val musicOn = try {
-            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            am.isMusicActive
-        } catch (_: Exception) {
-            false
+        if (note != null) return hashIsland(note)
+        if (audioPlaying(context)) {
+            return hashIsland(
+                mapOf(
+                    "kind" to "music",
+                    "title" to "Now playing",
+                    "subtitle" to "",
+                    "playing" to true,
+                    "progress" to 0.0,
+                    "expanded" to false,
+                    "elapsedLabel" to "",
+                    "source" to "audio",
+                ),
+            )
         }
-        if (musicOn) {
-            return mapOf(
-                "kind" to "music",
-                "title" to "Now playing",
+        return hashIsland(
+            mapOf(
+                "kind" to "idle",
+                "title" to "",
                 "subtitle" to "",
-                "playing" to true,
+                "playing" to false,
                 "progress" to 0.0,
                 "expanded" to false,
                 "elapsedLabel" to "",
-            )
-        }
-        return mapOf(
-            "kind" to "idle",
-            "title" to "",
-            "subtitle" to "",
-            "playing" to false,
-            "progress" to 0.0,
-            "expanded" to false,
-            "elapsedLabel" to "",
+                "source" to "none",
+            ),
         )
     }
 
@@ -395,16 +401,40 @@ object MorphQs {
         return listed
     }
 
-    private fun activeMedia(context: Context): MediaController? {
-        val list = activeSessions(context)
-        return list.firstOrNull {
-            it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
-        } ?: list.firstOrNull {
-            it.playbackState?.state == android.media.session.PlaybackState.STATE_BUFFERING
-        } ?: list.firstOrNull { it.metadata != null } ?: list.firstOrNull()
+    private fun isLivePlayback(state: Int?): Boolean {
+        return state == PlaybackState.STATE_PLAYING ||
+            state == PlaybackState.STATE_BUFFERING ||
+            state == PlaybackState.STATE_FAST_FORWARDING ||
+            state == PlaybackState.STATE_REWINDING
     }
 
-    private fun sessionToIsland(ctrl: MediaController): Map<String, Any?> {
+    private fun activeMedia(context: Context, playingOnly: Boolean = true): MediaController? {
+        val list = activeSessions(context)
+        val live = list.firstOrNull { isLivePlayback(it.playbackState?.state) }
+        if (live != null) return live
+        if (playingOnly) return null
+        return list.firstOrNull { it.metadata != null } ?: list.firstOrNull()
+    }
+
+    private fun audioPlaying(context: Context): Boolean {
+        return try {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (am.isMusicActive) return true
+            if (Build.VERSION.SDK_INT >= 26) {
+                am.activePlaybackConfigurations.any { cfg ->
+                    val usage = cfg.audioAttributes.usage
+                    usage == AudioAttributes.USAGE_MEDIA ||
+                        usage == AudioAttributes.USAGE_GAME
+                }
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun sessionToIsland(ctrl: MediaController): HashMap<String, Any> {
         val md = ctrl.metadata
         val title = listOf(
             md?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_TITLE),
@@ -418,17 +448,32 @@ object MorphQs {
         ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
         val dur = md?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val pos = ctrl.playbackState?.position ?: 0L
-        val playing = ctrl.playbackState?.state ==
-            android.media.session.PlaybackState.STATE_PLAYING
-        return mapOf(
-            "kind" to "music",
-            "title" to title.ifBlank { if (playing) "Now playing" else "Music" },
-            "subtitle" to artist,
-            "playing" to playing,
-            "progress" to if (dur > 0) pos.toDouble() / dur else 0.0,
-            "expanded" to false,
-            "elapsedLabel" to "",
+        val playing = isLivePlayback(ctrl.playbackState?.state)
+        return hashIsland(
+            mapOf(
+                "kind" to "music",
+                "title" to title.ifBlank { if (playing) "Now playing" else "Music" },
+                "subtitle" to artist,
+                "playing" to playing,
+                "progress" to if (dur > 0) (pos.toDouble() / dur).coerceIn(0.0, 1.0) else 0.0,
+                "expanded" to false,
+                "elapsedLabel" to "",
+                "source" to "session",
+            ),
         )
+    }
+
+    private fun hashIsland(raw: Map<String, Any?>): HashMap<String, Any> {
+        val out = HashMap<String, Any>(8)
+        out["kind"] = raw["kind"]?.toString() ?: "idle"
+        out["title"] = raw["title"]?.toString().orEmpty()
+        out["subtitle"] = raw["subtitle"]?.toString().orEmpty()
+        out["playing"] = raw["playing"] == true
+        out["progress"] = (raw["progress"] as? Number)?.toDouble() ?: 0.0
+        out["expanded"] = raw["expanded"] == true
+        out["elapsedLabel"] = raw["elapsedLabel"]?.toString().orEmpty()
+        out["source"] = raw["source"]?.toString() ?: "hint"
+        return out
     }
 
     private fun media(context: Context): Map<String, Any?>? {
@@ -501,6 +546,34 @@ object MorphQs {
             true
         } catch (_: Exception) {
             if (packageName.isNotBlank()) openAppInfo(context, packageName) else false
+        }
+    }
+}
+
+/** Audio playback watch so the island updates without waiting on a 2s poll. */
+object MorphIslandWatch {
+    @Volatile
+    private var registered = false
+
+    fun ensure(context: Context) {
+        if (registered) return
+        registered = true
+        if (Build.VERSION.SDK_INT < 26) return
+        try {
+            val app = context.applicationContext
+            val am = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            am.registerAudioPlaybackCallback(
+                object : AudioManager.AudioPlaybackCallback() {
+                    override fun onPlaybackConfigChanged(
+                        configs: MutableList<android.media.AudioPlaybackConfiguration>?,
+                    ) {
+                        // Snapshot is pulled by Flutter on the next tick / chrome event.
+                    }
+                },
+                Handler(Looper.getMainLooper()),
+            )
+        } catch (_: Exception) {
+            registered = false
         }
     }
 }

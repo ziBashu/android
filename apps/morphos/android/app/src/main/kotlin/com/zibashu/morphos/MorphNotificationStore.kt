@@ -60,7 +60,8 @@ object MorphNotificationStore {
 
     private fun isMediaStyle(category: String, template: String): Boolean {
         return category == android.app.Notification.CATEGORY_TRANSPORT ||
-            template.contains("MediaStyle")
+            template.contains("MediaStyle") ||
+            template.contains("DecoratedMediaCustomViewStyle")
     }
 
     fun list(): List<Map<String, Any?>> {
