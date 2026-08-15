@@ -36,8 +36,9 @@ class MorphChromeService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val islandTick = object : Runnable {
         override fun run() {
-            refreshIsland()
-            handler.postDelayed(this, 1500)
+            // Do not draw an overlay island. The 1.5s tick used to re-add a
+            // TOP-CENTER "Now playing" pill on top of the OEM Magic Capsule.
+            remove(island).also { island = null }
         }
     }
 
@@ -101,7 +102,9 @@ class MorphChromeService : Service() {
             return
         }
         if (sidebarOn) ensureSidebar() else remove(sidebar).also { sidebar = null }
-        if (islandOn) refreshIsland() else remove(island).also { island = null }
+        // Never draw an overlay island. A TOP-CENTER pill sits on the OEM
+        // Magic Capsule (Honor / system island) and shows a second "Now playing".
+        remove(island).also { island = null }
         // Shade is home-only. A full-width TYPE_APPLICATION_OVERLAY at y=0
         // would steal the OEM status-bar swipe. Do not add a MATCH_PARENT
         // Gravity.TOP handle.
@@ -278,33 +281,7 @@ class MorphChromeService : Service() {
     }
 
     private fun refreshIsland() {
-        val snap = MorphQs.islandSnapshot(this)
-        val kind = snap["kind"]?.toString() ?: "idle"
-        if (kind == "idle") {
-            remove(island).also { island = null }
-            return
-        }
-        val title = snap["title"]?.toString().orEmpty().ifBlank { kind }
-        var pill = island
-        if (pill == null) {
-            pill = TextView(this).apply {
-                setTextColor(Color.WHITE)
-                textSize = 12f
-                setPadding(dp(16), dp(8), dp(16), dp(8))
-                setBackgroundColor(0xE6000000.toInt())
-                setOnClickListener { bringHome("island") }
-            }
-            island = pill
-            val lp = baseParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-            )
-            lp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            // Below the OEM cutout / Magic Capsule — never covers the OEM island.
-            lp.y = dp(ISLAND_TOP_INSET_DP)
-            add(pill, lp)
-        }
-        pill.text = title
+        remove(island).also { island = null }
     }
 
     private fun bringHome(reason: String) {

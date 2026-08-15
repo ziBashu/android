@@ -784,7 +784,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           if (c.chromeFlags.smartIsland && HomeGestures.islandDrawn(_island))
             Positioned(
-              top: MediaQuery.paddingOf(context).top,
+              top: MediaQuery.paddingOf(context).top +
+                  HomeGestures.islandBelowCutout,
               left: 0,
               right: 0,
               child: _islandPill(),

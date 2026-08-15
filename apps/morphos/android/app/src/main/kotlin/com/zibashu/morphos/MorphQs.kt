@@ -118,11 +118,12 @@ object MorphQs {
     fun islandSnapshot(context: Context): HashMap<String, Any> {
         MorphIslandWatch.ensure(context)
         val media = activeMedia(context, playingOnly = true)
-        if (media != null) return sessionToIsland(media)
+        if (media != null) return sessionToIsland(context, media)
         MorphNotificationStore.mediaHint()?.let { return hashIsland(it) }
         val note = MorphNotificationStore.islandHint()
         if (note != null) return hashIsland(note)
         if (audioPlaying(context)) {
+            MorphNotificationStore.playerAppHint()?.let { return hashIsland(it) }
             return hashIsland(
                 mapOf(
                     "kind" to "music",
@@ -434,26 +435,40 @@ object MorphQs {
         }
     }
 
-    private fun sessionToIsland(ctrl: MediaController): HashMap<String, Any> {
+    private fun sessionToIsland(context: Context, ctrl: MediaController): HashMap<String, Any> {
         val md = ctrl.metadata
-        val title = listOf(
+        val pkg = ctrl.packageName.orEmpty()
+        val app = appLabel(context, pkg)
+        val note = MorphNotificationStore.hintForPackage(pkg)
+        val metaTitle = listOf(
             md?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_TITLE),
             md?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE),
             md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM),
-        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+            ctrl.playbackState?.extras?.getString("title"),
+            note?.get("title")?.toString(),
+        ).firstOrNull { !it.isNullOrBlank() && !isGenericMediaTitle(it) }.orEmpty()
         val artist = listOf(
             md?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST),
             md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST),
             md?.getString(android.media.MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE),
-        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+            note?.get("body")?.toString(),
+        ).firstOrNull { !it.isNullOrBlank() && !isGenericMediaTitle(it) }.orEmpty()
         val dur = md?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val pos = ctrl.playbackState?.position ?: 0L
         val playing = isLivePlayback(ctrl.playbackState?.state)
+        val title = metaTitle.ifBlank { artist }.ifBlank { app }.ifBlank {
+            if (playing) "Now playing" else "Music"
+        }
+        val subtitle = when {
+            artist.isNotBlank() && artist != title -> artist
+            app.isNotBlank() && app != title -> app
+            else -> ""
+        }
         return hashIsland(
             mapOf(
                 "kind" to "music",
-                "title" to title.ifBlank { if (playing) "Now playing" else "Music" },
-                "subtitle" to artist,
+                "title" to title,
+                "subtitle" to subtitle,
                 "playing" to playing,
                 "progress" to if (dur > 0) (pos.toDouble() / dur).coerceIn(0.0, 1.0) else 0.0,
                 "expanded" to false,
@@ -461,6 +476,23 @@ object MorphQs {
                 "source" to "session",
             ),
         )
+    }
+
+    private fun isGenericMediaTitle(raw: String?): Boolean {
+        val t = raw?.trim()?.lowercase().orEmpty()
+        return t.isEmpty() || t == "now playing" || t == "music" ||
+            t == "brave" || t == "chrome" || t == "youtube" ||
+            t == "youtube music" || t == "media" || t.startsWith("com.")
+    }
+
+    private fun appLabel(context: Context, pkg: String): String {
+        if (pkg.isBlank()) return ""
+        return try {
+            val pm = context.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun hashIsland(raw: Map<String, Any?>): HashMap<String, Any> {

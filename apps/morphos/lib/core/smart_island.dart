@@ -34,6 +34,9 @@ class IslandActivity {
   bool get isIdle => kind == IslandKind.idle;
   bool get isMusic => kind == IslandKind.music;
 
+  /// Generic fallbacks must stay compact — they must not sit on the OEM island.
+  bool get hasSpecificTitle => IslandCopy.isSpecificTitle(title);
+
   static const musicTransport = ['seek', 'previous', 'pause', 'next'];
 
   List<String> get expandControls {
@@ -250,7 +253,11 @@ class IslandPresenter {
     }
     final changed = previous.signature != incoming.signature;
     if (changed) {
-      return IslandTick(activity: incoming.expand(), restartShrink: true);
+      final peek = incoming.hasSpecificTitle;
+      return IslandTick(
+        activity: peek ? incoming.expand() : incoming.compact(),
+        restartShrink: peek,
+      );
     }
     return IslandTick(
       activity: incoming.copyWith(expanded: previous.expanded),
@@ -273,4 +280,27 @@ class IslandTick {
 
   final IslandActivity activity;
   final bool restartShrink;
+}
+
+/// Titles that are not a real track / video name.
+class IslandCopy {
+  IslandCopy._();
+
+  static const genericTitles = {
+    '',
+    'now playing',
+    'music',
+    'brave',
+    'chrome',
+    'youtube',
+    'youtube music',
+    'media',
+  };
+
+  static bool isSpecificTitle(String title) {
+    final t = title.trim().toLowerCase();
+    if (genericTitles.contains(t)) return false;
+    if (t.startsWith('com.')) return false;
+    return t.length >= 2;
+  }
 }

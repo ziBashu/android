@@ -15,14 +15,14 @@ KEY = str(Path.home() / ".ssh" / "id_ed25519")
 SITE = "/www/wwwroot/ziBashu4.com"
 
 ANDROID_ROOT = Path.home() / "ANDROID"
-APK_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.6-warehub.apk"
-AAB_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.6-play.aab"
+APK_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.7-warehub.apk"
+AAB_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.7-play.aab"
 ICON_LOCAL = (
     ANDROID_ROOT / "apps" / "morphos" / "assets" / "brand" / "morphos_launcher_1024.png"
 )
 
-VERSION_NAME = "1.2.6"
-VERSION_CODE = 21
+VERSION_NAME = "1.2.7"
+VERSION_CODE = 22
 SLUG = "morphos"
 PACKAGE = "com.zibashu.morphos"
 

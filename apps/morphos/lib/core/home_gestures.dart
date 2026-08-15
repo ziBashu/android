@@ -37,7 +37,11 @@ class HomeGestures {
   static const islandLiveWidth = islandCompactWidth;
   static const islandLiveHeight = islandCompactHeight;
 
-  /// Overlay live island sits below the OEM cutout / Magic Capsule.
+  /// Extra gap under the punch-hole / OEM Magic Capsule so Morph
+  /// never draws on top of the system island.
+  static const islandBelowCutout = 36.0;
+
+  /// Overlay must not draw a second island over the OEM capsule.
   static const islandOverlayTopInset = 56.0;
 
   /// Upmost band (status bar). Pulls that start here are the system shade.
@@ -99,7 +103,8 @@ class HomeGestures {
 
   static bool islandDrawn(IslandActivity activity) => !activity.isIdle;
 
-  static bool overlayIslandShown(IslandActivity activity) => !activity.isIdle;
+  /// Overlay island is disabled — it sat on the OEM Magic Capsule.
+  static bool overlayIslandShown(IslandActivity activity) => false;
 
   /// Overlay must never place a full-width steal on the status-bar edge.
   static const bool overlayStealsUpmostEdge = false;

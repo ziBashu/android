@@ -16,7 +16,7 @@
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Personal adaptive environment — global home launcher, productivity widgets, morph packs. |
-| Version | **`1.2.6+21`** |
+| Version | **`1.2.7+22`** |
 | Launcher icon | Custom ziBashu brand mark (`assets/brand/morphos_launcher_1024.png`) — not Flutter default |
 
 ## Product identity
@@ -83,6 +83,7 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 | **1.2.4 Chrome** | Easier rim sidebar · idle island occupies 0 · live media transport · Morph shade only from lower-upper pull · OEM island/shade unblocked |
 | **1.2.5 Hit** | Live Smart Island stacked above the Morph shade pull so tap/expand/transport work |
 | **1.2.6 Island** | Media detection (NLS ongoing + audio + playing sessions); compact auto-shrink capsule |
+| **1.2.7 Island** | No overlay on OEM Magic Capsule; generic Now playing stays compact; Brave/YouTube titles from notifications |
 | 6+ Custom ROM | Long-term vision (not this APK) |
 
 ## Hardening
@@ -99,9 +100,9 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 - [x] Custom MorphOS launcher icon (ziBashu forest/cream + brand mark)
 - [x] Demo/offline when device APIs fail
 - [x] analyze / unit tests / harden_check
-- [x] Warehub upload **v1.2.6** — https://zibashu4.com/hub/warehub/morphos
+- [x] Warehub upload **v1.2.7** — https://zibashu4.com/hub/warehub/morphos
 - [x] Dual signed release (upload keystore): warehub APK + Play AAB in `dist/`
-- [ ] Play Console upload (AAB ready at `dist/morphos-v1.2.6-play.aab`; Internal track when requested)
+- [ ] Play Console upload (AAB ready at `dist/morphos-v1.2.7-play.aab`; Internal track when requested)
 
 ## References
 

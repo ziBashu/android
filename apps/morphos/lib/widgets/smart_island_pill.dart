@@ -39,9 +39,10 @@ class SmartIslandPill extends StatelessWidget {
         }
       },
       child: AnimatedSize(
-        duration: const Duration(milliseconds: 280),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         alignment: Alignment.topCenter,
+        clipBehavior: Clip.hardEdge,
         child: activity.expanded ? _expanded() : _compact(),
       ),
     );

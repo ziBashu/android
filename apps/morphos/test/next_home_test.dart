@@ -459,6 +459,12 @@ void main() {
       expect(HomeGestures.islandDrawn(IslandActivity.idle), isFalse);
       expect(HomeGestures.islandOccupancyHeight(IslandActivity.idle), 0);
       expect(HomeGestures.overlayIslandShown(IslandActivity.idle), isFalse);
+      expect(
+        HomeGestures.overlayIslandShown(
+          IslandActivity.music(title: 'Midnight City'),
+        ),
+        isFalse,
+      );
     });
 
     test('auto-shrink after a peek; same track stays compact', () {
@@ -474,6 +480,15 @@ void main() {
       expect(peek.activity.isMusic, isTrue);
       expect(peek.activity.expanded, isTrue);
       expect(peek.restartShrink, isTrue);
+      expect(incoming.hasSpecificTitle, isTrue);
+      final generic = IslandPresenter.apply(
+        previous: IslandActivity.idle,
+        incoming: IslandActivity.music(title: 'Now playing', playing: true),
+      );
+      expect(generic.activity.expanded, isFalse);
+      expect(generic.restartShrink, isFalse);
+      expect(IslandCopy.isSpecificTitle('Now playing'), isFalse);
+      expect(IslandCopy.isSpecificTitle('Brave'), isFalse);
       expect(
         IslandPresenter.shouldAutoShrink(
           activity: peek.activity,
@@ -574,9 +589,14 @@ void main() {
     expect(kt, contains('inwardSwipe'));
     expect(kt, contains('STATUS_BAR_BAND_DP'));
     expect(kt, contains('ISLAND_TOP_INSET_DP'));
-    expect(kt, contains('kind == "idle"'));
-    expect(kt, contains('never covers the OEM'));
+    expect(kt, contains('Do not draw an overlay island'));
+    expect(kt, contains('Magic Capsule'));
     expect(kt, contains('Do not add a MATCH_PARENT'));
+    expect(kt, isNot(contains('Gravity.TOP or Gravity.CENTER_HORIZONTAL')));
+    expect(
+      File('lib/features/home/home_screen.dart').readAsStringSync(),
+      contains('islandBelowCutout'),
+    );
     expect(kt, isNot(contains('MATCH_PARENT, dp(28)')));
     expect(kt, isNot(contains('lp.y = dp(8)')));
     final qs = File(

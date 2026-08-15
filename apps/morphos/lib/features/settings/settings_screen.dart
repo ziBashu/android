@@ -377,7 +377,7 @@ class SettingsScreen extends StatelessWidget {
                 title: Text('Smart Island', style: TextStyle(color: p.ink)),
                 subtitle: Text(
                   c.chromeFlags.smartIsland
-                      ? 'Pops up for what is happening, then shrinks. Does not replace the system island.'
+                      ? 'Sits below the system island. Needs Notification access for Brave / YouTube titles.'
                       : 'System — Morph island off',
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),

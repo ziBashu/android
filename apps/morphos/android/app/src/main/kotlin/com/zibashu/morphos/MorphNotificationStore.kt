@@ -9,22 +9,32 @@ object MorphNotificationStore {
 
     fun upsert(sbn: StatusBarNotification) {
         val extras = sbn.notification.extras
-        val title = extras?.getCharSequence("android.title")?.toString().orEmpty()
-        val text = extras?.getCharSequence("android.text")?.toString().orEmpty()
+        val title = listOf(
+            extras?.getCharSequence("android.title")?.toString(),
+            extras?.getCharSequence("android.title.big")?.toString(),
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+        val text = listOf(
+            extras?.getCharSequence("android.bigText")?.toString(),
+            extras?.getCharSequence("android.text")?.toString(),
+            extras?.getCharSequence("android.subText")?.toString(),
+            extras?.getCharSequence("android.infoText")?.toString(),
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
         if (title.isBlank() && text.isBlank()) return
         val category = sbn.notification.category ?: ""
         val template = extras?.getString("android.template").orEmpty()
+        val hasSession = extras?.containsKey("android.mediaSession") == true
         val row = mapOf(
             "key" to sbn.key,
             "packageName" to sbn.packageName,
-            "title" to title.ifBlank { sbn.packageName },
-            "body" to text,
+            "title" to title.ifBlank { text },
+            "body" to if (title.isNotBlank()) text else "",
             "category" to category,
             "template" to template,
+            "hasSession" to hasSession,
         )
         synchronized(lock) {
             items[sbn.key] = row
-            if (isMediaStyle(category, template)) {
+            if (isMediaStyle(category, template) || hasSession || isPlayerApp(sbn.packageName)) {
                 mediaHintRow = row
             }
             while (items.size > 24) {
@@ -43,19 +53,65 @@ object MorphNotificationStore {
 
     fun mediaHint(): Map<String, Any?>? {
         val row = synchronized(lock) { mediaHintRow }
-            ?: list().firstOrNull { isMediaStyle("${it["category"]}", "${it["template"]}") }
+            ?: list().firstOrNull {
+                isMediaStyle("${it["category"]}", "${it["template"]}") ||
+                    it["hasSession"] == true
+            }
             ?: return null
-        val title = (row["title"] as? String).orEmpty()
+        return rowToMusic(row)
+    }
+
+    fun hintForPackage(pkg: String): Map<String, Any?>? {
+        if (pkg.isBlank()) return null
+        return list().lastOrNull { it["packageName"] == pkg }
+    }
+
+    fun playerAppHint(): Map<String, Any?>? {
+        val row = list().asReversed().firstOrNull { isPlayerApp("${it["packageName"]}") }
+            ?: return null
+        return rowToMusic(row)
+    }
+
+    private fun rowToMusic(row: Map<String, Any?>): Map<String, Any?> {
+        val rawTitle = (row["title"] as? String).orEmpty()
         val body = (row["body"] as? String).orEmpty()
+        val generic = isGeneric(rawTitle)
+        val title = when {
+            !generic -> rawTitle
+            body.isNotBlank() && !isGeneric(body) -> body
+            else -> rawTitle.ifBlank { "Now playing" }
+        }
+        val subtitle = when {
+            title == body || isGeneric(body) -> ""
+            body.isNotBlank() -> body
+            else -> ""
+        }
         return mapOf(
             "kind" to "music",
-            "title" to title.ifBlank { "Now playing" },
-            "subtitle" to body,
+            "title" to title,
+            "subtitle" to subtitle,
             "playing" to true,
             "progress" to 0.0,
             "expanded" to false,
             "elapsedLabel" to "",
+            "source" to "notification",
         )
+    }
+
+    private fun isGeneric(raw: String): Boolean {
+        val t = raw.trim().lowercase()
+        return t.isEmpty() || t == "now playing" || t == "music" ||
+            t == "brave" || t == "chrome" || t == "youtube" ||
+            t == "youtube music" || t == "media" || t.startsWith("com.")
+    }
+
+    private fun isPlayerApp(pkg: String): Boolean {
+        val p = pkg.lowercase()
+        return p.contains("youtube") || p.contains("brave") ||
+            p.contains("chrome") || p.contains("spotify") ||
+            p.contains("music") || p.contains("vlc") ||
+            p.contains("exoplayer") || p.contains("netflix") ||
+            p.contains("bilibili") || p.contains("tiktok")
     }
 
     private fun isMediaStyle(category: String, template: String): Boolean {
