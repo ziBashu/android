@@ -21,6 +21,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var bridge: MorphSystemBridge? = null
     private var launcherEvents: EventChannel.EventSink? = null
+    private var chromeEvents: EventChannel.EventSink? = null
 
     override fun getRenderMode(): RenderMode = RenderMode.texture
 
@@ -47,6 +48,19 @@ class MainActivity : FlutterActivity() {
 
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            CHROME_CHANNEL,
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                chromeEvents = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                chromeEvents = null
+            }
+        })
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             EVENT_CHANNEL,
         ).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -66,6 +80,7 @@ class MainActivity : FlutterActivity() {
         setIntent(intent)
         // Home button while MorphOS is already the task → pop Flutter to root.
         emitLauncherEvent(intent)
+        emitChromeExtra(intent)
     }
 
     override fun onResume() {
@@ -73,6 +88,15 @@ class MainActivity : FlutterActivity() {
         // When returning via HOME as default launcher, force home surface.
         if (isHomeIntent(intent)) {
             emitLauncherEvent(intent)
+        }
+        emitChromeExtra(intent)
+    }
+
+    private fun emitChromeExtra(intent: Intent?) {
+        val reason = intent?.getStringExtra("morph_chrome") ?: return
+        try {
+            chromeEvents?.success(mapOf("type" to reason))
+        } catch (_: Exception) {
         }
     }
 
@@ -111,6 +135,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val METHOD_CHANNEL = "com.zibashu.morphos/system"
         private const val EVENT_CHANNEL = "com.zibashu.morphos/launcher"
+        private const val CHROME_CHANNEL = "com.zibashu.morphos/chrome"
 
         fun isHomeIntent(intent: Intent?): Boolean {
             if (intent == null) return false

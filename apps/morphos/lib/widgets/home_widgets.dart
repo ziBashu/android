@@ -22,6 +22,8 @@ class HomeWidgetStrip extends StatelessWidget {
     this.weatherBusy = false,
     this.browserLabel,
     this.onRefreshWeather,
+    this.editing = false,
+    this.onReorder,
   });
 
   final MorphController controller;
@@ -36,6 +38,8 @@ class HomeWidgetStrip extends StatelessWidget {
   final bool weatherBusy;
   final String? browserLabel;
   final VoidCallback? onRefreshWeather;
+  final bool editing;
+  final void Function(int from, int to)? onReorder;
 
   @override
   Widget build(BuildContext context) {
@@ -47,8 +51,10 @@ class HomeWidgetStrip extends StatelessWidget {
         spacing: 10,
         runSpacing: 10,
         children: [
-          for (final kind in kinds)
-            switch (kind) {
+          for (var i = 0; i < kinds.length; i++)
+            _maybeDrag(
+              index: i,
+              child: switch (kinds[i]) {
               HomeWidgetKind.clock => SizedBox(
                   width: wide,
                   child: ClockHomeWidget(),
@@ -91,8 +97,26 @@ class HomeWidgetStrip extends StatelessWidget {
                   busy: weatherBusy,
                   onTap: onRefreshWeather ?? () {},
                 ),
-            },
+              },
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _maybeDrag({required int index, required Widget child}) {
+    if (!editing || onReorder == null) return child;
+    return LongPressDraggable<int>(
+      data: index,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Opacity(opacity: 0.85, child: child),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: child),
+      child: DragTarget<int>(
+        onWillAcceptWithDetails: (d) => d.data != index,
+        onAcceptWithDetails: (d) => onReorder!(d.data, index),
+        builder: (_, __, ___) => child,
       ),
     );
   }

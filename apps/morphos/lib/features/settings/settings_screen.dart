@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
 
+import '../../core/chrome_flags.dart';
 import '../../core/home_occupancy.dart';
 import '../../core/image_customize.dart';
 import '../../core/models.dart';
@@ -15,6 +16,7 @@ import '../ecosystem/morph_creator_screen.dart';
 import '../ecosystem/morph_store_screen.dart';
 import '../connection/phone_connection_screen.dart';
 import '../platform/platform_screen.dart';
+import 'apps_customize_screen.dart';
 import '../vision/vision_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -287,6 +289,16 @@ class SettingsScreen extends StatelessWidget {
                 value: c.dockVisible,
                 onChanged: c.setDockVisible,
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Auto-arrange', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Off (default): remove leaves a void grid slot',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.autoArrange,
+                onChanged: c.setAutoArrange,
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(Icons.cleaning_services_outlined, color: p.accent),
@@ -299,6 +311,105 @@ class SettingsScreen extends StatelessWidget {
                   style: TextStyle(color: p.muted, fontSize: 12),
                 ),
                 onTap: () => c.deleteAllHomeApps(),
+              ),
+            ]),
+            _section(c, 'All apps', [
+              Text(
+                'Change an app’s name, icon, size, or hide its name. '
+                'This stays in MorphOS and does not rename the system app.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.apps, color: p.accentSecondary),
+                title: Text('View all apps', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Name · icon · size · hide name',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                trailing: Icon(Icons.chevron_right, color: p.muted),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ListenableBuilder(
+                        listenable: c,
+                        builder: (_, __) =>
+                            AppsCustomizeScreen(controller: c),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ]),
+            _section(c, 'Morph chrome', [
+              Text(
+                'Turn a layer off to use the system UI again.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Sidebar', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.chromeFlags.sidebar
+                      ? 'Edge line expands to quick-enter apps'
+                      : 'System — Morph sidebar off',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.chromeFlags.sidebar,
+                onChanged: (v) =>
+                    c.setChromeLayer(MorphChromeLayer.sidebar, v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Notification bar', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.chromeFlags.notificationBar
+                      ? 'Swipe down for the Morph control center'
+                      : 'System — Morph notification bar off',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.chromeFlags.notificationBar,
+                onChanged: (v) =>
+                    c.setChromeLayer(MorphChromeLayer.notificationBar, v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Smart Island', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  c.chromeFlags.smartIsland
+                      ? 'Tiny top pill for what is happening now'
+                      : 'System — Morph island off',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.chromeFlags.smartIsland,
+                onChanged: (v) =>
+                    c.setChromeLayer(MorphChromeLayer.smartIsland, v),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Notification access',
+                  style: TextStyle(color: p.ink),
+                ),
+                subtitle: Text(
+                  'Needed for live tiles, media, and island activities',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: SystemMorphBridge.openNotificationListenerSettings,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Draw over other apps',
+                  style: TextStyle(color: p.ink),
+                ),
+                subtitle: Text(
+                  c.systemStatus.canDrawOverlays
+                      ? 'Granted — chrome can sit above other apps'
+                      : 'Grant overlay so chrome works outside MorphOS',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: SystemMorphBridge.openOverlaySettings,
               ),
             ]),
             _section(c, 'Rotation', [

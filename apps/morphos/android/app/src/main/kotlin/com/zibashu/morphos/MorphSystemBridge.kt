@@ -204,6 +204,58 @@ class MorphSystemBridge(
                 result.success(next)
             }
             "getDisplayInfo" -> result.success(displayInfo())
+            "openAppInfo" -> {
+                val pkg = call.argument<String>("packageName") ?: ""
+                result.success(MorphQs.openAppInfo(context, pkg))
+            }
+            "runShortcut" -> {
+                val action = call.argument<String>("action") ?: ""
+                val pkg = call.argument<String>("packageName") ?: ""
+                result.success(MorphQs.runShortcut(context, action, pkg))
+            }
+            "getShadeSnapshot" -> result.success(MorphQs.snapshot(context))
+            "toggleShadeTile" -> {
+                val id = call.argument<String>("id") ?: ""
+                result.success(MorphQs.toggle(context, id))
+            }
+            "setBrightness" -> {
+                val value = (call.argument<Number>("value") ?: 0.5).toDouble()
+                result.success(MorphQs.setBrightness(context, value))
+            }
+            "islandCommand" -> {
+                val cmd = call.argument<String>("command") ?: ""
+                result.success(MorphQs.islandCommand(context, cmd))
+            }
+            "getIslandSnapshot" -> result.success(MorphQs.islandSnapshot(context))
+            "syncChrome" -> {
+                val sidebar = call.argument<Boolean>("sidebar") ?: true
+                val shade = call.argument<Boolean>("notificationBar") ?: true
+                val island = call.argument<Boolean>("smartIsland") ?: true
+                @Suppress("UNCHECKED_CAST")
+                val shortcuts = (call.argument<List<Any?>>("shortcuts")
+                    ?: emptyList())
+                    .mapNotNull { it?.toString() }
+                MorphChromeService.sync(context, sidebar, shade, island, shortcuts)
+                result.success(true)
+            }
+            "setHomeVisible" -> {
+                val visible = call.argument<Boolean>("visible") ?: false
+                MorphChromeService.setHomeVisible(context, visible)
+                result.success(true)
+            }
+            "openNotificationListenerSettings" -> {
+                result.success(
+                    try {
+                        context.startActivity(
+                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                        true
+                    } catch (_: Exception) {
+                        false
+                    },
+                )
+            }
             else -> result.notImplemented()
         }
     }

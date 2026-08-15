@@ -17,6 +17,9 @@ class AppIconTile extends StatelessWidget {
     this.showLabel,
     this.showMinus = false,
     this.onMinus,
+    this.selected = false,
+    this.sizeOverride,
+    this.forceHideLabel = false,
   });
 
   final MorphAppItem app;
@@ -27,6 +30,9 @@ class AppIconTile extends StatelessWidget {
   final bool? showLabel;
   final bool showMinus;
   final VoidCallback? onMinus;
+  final bool selected;
+  final double? sizeOverride;
+  final bool forceHideLabel;
 
   MorphPalette get p => controller.palette;
 
@@ -43,11 +49,16 @@ class AppIconTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scale = controller.iconScale.clamp(0.75, 1.25);
+    final scale = controller.iconScale.clamp(0.75, 1.25) *
+        (sizeOverride ??
+            controller.sizeScaleFor(app.id, packageName: app.packageName));
     final size = (compact ? 44.0 : 52.0) * scale;
     final label = controller.labelFor(app);
     final neon = controller.iconStyle == IconStyleId.neon;
-    final labels = showLabel ?? controller.showLabels;
+    final labels = forceHideLabel ||
+            controller.hideNameFor(app.id, packageName: app.packageName)
+        ? false
+        : (showLabel ?? controller.showLabels);
     final bytes = app.iconBytes;
 
     Widget iconChild;
@@ -119,6 +130,20 @@ class AppIconTile extends StatelessWidget {
                 ),
                 child: iconChild,
               ),
+              if (selected)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF2E7D32),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check, size: 12, color: Colors.white),
+                  ),
+                ),
               if (showMinus)
                 Positioned(
                   left: -6,

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_appearance.dart';
+import 'chrome_flags.dart';
 import 'home_occupancy.dart';
 import 'image_customize.dart';
 import 'models.dart';
@@ -80,6 +82,12 @@ class MorphController extends ChangeNotifier {
   bool dockVisible = true;
   bool occupancySeeded = false;
   List<HomeWidgetKind> homeWidgets = const [];
+  bool autoArrange = false;
+  List<String> hiddenIds = const [];
+  List<HomeFolder> folders = const [];
+  MorphChromeFlags chromeFlags = const MorphChromeFlags();
+  SidebarStrip sidebar = const SidebarStrip();
+  AppAppearanceStore appearances = const AppAppearanceStore();
   List<String> starredAppIds = const [];
   Map<String, int> launchCounts = {};
   RotationAction rotationAction = RotationAction.sensor;
@@ -161,8 +169,27 @@ class MorphController extends ChangeNotifier {
   MorphEnvironment get activeEnvironment =>
       environments[profileId] ?? MorphEnvironment.defaultsFor(profileId);
 
-  String labelFor(MorphAppItem app) =>
-      renames[app.id] ?? renames[app.packageName ?? ''] ?? app.label;
+  String labelFor(MorphAppItem app) {
+    final fromStore = appearances.displayName(app.id, '');
+    if (fromStore.isNotEmpty) return fromStore;
+    final pkg = app.packageName ?? '';
+    if (pkg.isNotEmpty) {
+      final alt = appearances.displayName(pkg, '');
+      if (alt.isNotEmpty) return alt;
+    }
+    return renames[app.id] ?? renames[pkg] ?? app.label;
+  }
+
+  bool hideNameFor(String id, {String? packageName}) =>
+      appearances.hideName(id) ||
+      (packageName != null && appearances.hideName(packageName));
+
+  double sizeScaleFor(String id, {String? packageName}) {
+    final a = appearances.of(id);
+    if (a.sizeScale != 1.0) return a.sizeScale;
+    if (packageName != null) return appearances.sizeScale(packageName);
+    return 1.0;
+  }
 
   /// Display app with MorphOS rename + custom icon (phone connection layer).
   MorphAppItem displayApp(MorphAppItem app) {
@@ -253,6 +280,25 @@ class MorphController extends ChangeNotifier {
           dockVisible = m['dockVisible'] as bool? ?? true;
           occupancySeeded = m['occupancySeeded'] as bool? ?? false;
           homeWidgets = _widgetsFrom(m['homeWidgets']);
+          autoArrange = m['autoArrange'] as bool? ?? false;
+          hiddenIds = List<String>.from(m['hiddenIds'] as List? ?? const []);
+          folders = _foldersFrom(m['folders']);
+          chromeFlags = MorphChromeFlags.fromJson(
+            (m['chromeFlags'] as Map?)?.cast<String, dynamic>(),
+          );
+          sidebar = SidebarStrip.fromJson(
+            (m['sidebar'] as Map?)?.cast<String, dynamic>(),
+          );
+          appearances = AppAppearanceStore.fromJson(
+            (m['appearances'] as Map?)?.cast<String, dynamic>(),
+          );
+          if (appearances.byId.isEmpty &&
+              (renames.isNotEmpty || iconOverridesB64.isNotEmpty)) {
+            appearances = AppAppearanceStore.fromLegacy(
+              names: renames,
+              icons: iconOverridesB64,
+            );
+          }
           starredAppIds =
               List<String>.from(m['starredAppIds'] as List? ?? const []);
           launchCounts = (m['launchCounts'] as Map?)?.map(
@@ -377,6 +423,10 @@ class MorphController extends ChangeNotifier {
         await applyPlatformChrome();
         await _syncKeepAwake();
         await _clearStaleForcedRotationOnce();
+        await SystemMorphBridge.syncChrome({
+          ...chromeFlags.toJson(),
+          'shortcuts': sidebar.shortcutIds,
+        });
       } catch (_) {}
     });
   }
@@ -429,12 +479,26 @@ class MorphController extends ChangeNotifier {
     return out;
   }
 
+  static List<HomeFolder> _foldersFrom(dynamic raw) {
+    if (raw is! List) return const [];
+    final out = <HomeFolder>[];
+    for (final e in raw) {
+      if (e is Map) {
+        out.add(HomeFolder.fromJson(Map<String, dynamic>.from(e)));
+      }
+    }
+    return out;
+  }
+
   HomeOccupancy get occupancy => HomeOccupancy(
         homeIds: homeIds,
         dockIds: dockIds,
         dockVisible: dockVisible,
         widgets: homeWidgets,
         seeded: occupancySeeded,
+        autoArrange: autoArrange,
+        hiddenIds: hiddenIds,
+        folders: folders,
       );
 
   Future<void> applyOccupancy(HomeOccupancy next) async {
@@ -443,6 +507,9 @@ class MorphController extends ChangeNotifier {
     dockVisible = next.dockVisible;
     homeWidgets = List<HomeWidgetKind>.from(next.widgets);
     occupancySeeded = next.seeded;
+    autoArrange = next.autoArrange;
+    hiddenIds = List<String>.from(next.hiddenIds);
+    folders = List<HomeFolder>.from(next.folders);
     await _persist();
     notifyListeners();
   }
@@ -476,6 +543,13 @@ class MorphController extends ChangeNotifier {
       packages: packages,
     );
     await applyOccupancy(seeded);
+    if (sidebar.shortcutIds.isEmpty && seeded.dockIds.isNotEmpty) {
+      var strip = const SidebarStrip();
+      for (final id in seeded.dockIds) {
+        strip = strip.add(id);
+      }
+      await setSidebar(strip);
+    }
   }
 
   Future<void> deleteAllHomeApps() =>
@@ -494,9 +568,9 @@ class MorphController extends ChangeNotifier {
 
   Future<bool> addToHome(String id) async {
     if (id.isEmpty) return false;
-    if (homeIds.contains(id) || dockIds.contains(id)) return false;
+    if (occupancy.isOnHome(id) || dockIds.contains(id)) return false;
     await applyOccupancy(occupancy.addToHome(id).copyWith(seeded: true));
-    return homeIds.contains(id);
+    return occupancy.isOnHome(id);
   }
 
   Future<void> addToDock(String id) =>
@@ -525,6 +599,79 @@ class MorphController extends ChangeNotifier {
     );
     await applyOccupancy(next.copyWith(seeded: true));
   }
+
+  Future<void> hideApp(String id) =>
+      applyOccupancy(occupancy.hideApp(id).copyWith(seeded: true));
+
+  Future<void> unhideApp(String id) =>
+      applyOccupancy(occupancy.unhideApp(id).copyWith(seeded: true));
+
+  Future<void> setAutoArrange(bool on) =>
+      applyOccupancy(occupancy.setAutoArrange(on).copyWith(seeded: true));
+
+  Future<void> removeSelection(List<String> ids) =>
+      applyOccupancy(occupancy.removeSelection(ids).copyWith(seeded: true));
+
+  Future<void> foldSelection(List<String> ids, String name) =>
+      applyOccupancy(
+        occupancy.foldSelection(ids, name).copyWith(seeded: true),
+      );
+
+  Future<void> renameFolder(String folderId, String name) =>
+      applyOccupancy(
+        occupancy.renameFolder(folderId, name).copyWith(seeded: true),
+      );
+
+  Future<void> moveHomeSlot(int from, int to) =>
+      applyOccupancy(occupancy.moveHomeSlot(from, to).copyWith(seeded: true));
+
+  Future<void> moveHomeWidget(int from, int to) =>
+      applyOccupancy(occupancy.moveWidget(from, to).copyWith(seeded: true));
+
+  Future<void> setChromeFlags(MorphChromeFlags flags) async {
+    chromeFlags = flags;
+    await _persist();
+    notifyListeners();
+    unawaited(SystemMorphBridge.syncChrome(flags.toJson()));
+  }
+
+  Future<void> setChromeLayer(MorphChromeLayer layer, bool on) =>
+      setChromeFlags(chromeFlags.setEnabled(layer, on));
+
+  Future<void> setSidebar(SidebarStrip next) async {
+    sidebar = next;
+    await _persist();
+    notifyListeners();
+    unawaited(
+      SystemMorphBridge.syncChrome({
+        ...chromeFlags.toJson(),
+        'shortcuts': next.shortcutIds,
+      }),
+    );
+  }
+
+  Future<void> applyAppearance(AppAppearanceStore next) async {
+    appearances = next;
+    // Keep legacy maps in sync so older screens still work.
+    final names = <String, String>{};
+    final icons = <String, String>{};
+    for (final e in next.byId.entries) {
+      final n = e.value.customName?.trim();
+      if (n != null && n.isNotEmpty) names[e.key] = n;
+      final ic = e.value.iconB64;
+      if (ic != null && ic.isNotEmpty) icons[e.key] = ic;
+    }
+    renames = names;
+    iconOverridesB64 = icons;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setAppHideName(String id, bool hide) =>
+      applyAppearance(appearances.setHideName(id, hide));
+
+  Future<void> setAppSizeScale(String id, double scale) =>
+      applyAppearance(appearances.setSize(id, scale));
 
   Future<void> toggleHomeWidget(HomeWidgetKind kind) =>
       applyOccupancy(occupancy.toggleWidget(kind).copyWith(seeded: true));
@@ -623,6 +770,12 @@ class MorphController extends ChangeNotifier {
         'dockVisible': dockVisible,
         'occupancySeeded': occupancySeeded,
         'homeWidgets': homeWidgets.map((w) => w.name).toList(),
+        'autoArrange': autoArrange,
+        'hiddenIds': hiddenIds,
+        'folders': folders.map((f) => f.toJson()).toList(),
+        'chromeFlags': chromeFlags.toJson(),
+        'sidebar': sidebar.toJson(),
+        'appearances': appearances.toJson(),
         'starredAppIds': starredAppIds,
         'launchCounts': launchCounts,
         'rotationAction': rotationAction.mode,
@@ -1304,33 +1457,21 @@ class MorphController extends ChangeNotifier {
   }
 
   Future<void> renameApp(String id, String name) async {
-    final t = name.trim();
-    if (t.isEmpty) {
-      renames.remove(id);
-    } else {
-      renames[id] = t;
-    }
-    await _persist();
-    notifyListeners();
+    await applyAppearance(appearances.setName(id, name));
   }
 
   /// Store a MorphOS-only custom icon (base64). Empty clears override.
   Future<void> setAppIconOverride(String id, List<int>? bytes) async {
     if (bytes == null || bytes.isEmpty) {
-      iconOverridesB64.remove(id);
-    } else {
-      // Keep prefs small — refuse huge payloads.
-      if (bytes.length > 200 * 1024) return;
-      iconOverridesB64[id] = base64Encode(bytes);
+      await applyAppearance(appearances.setIcon(id, null));
+      return;
     }
-    await _persist();
-    notifyListeners();
+    if (bytes.length > 200 * 1024) return;
+    await applyAppearance(appearances.setIcon(id, base64Encode(bytes)));
   }
 
   Future<void> clearAppIconOverride(String id) async {
-    iconOverridesB64.remove(id);
-    await _persist();
-    notifyListeners();
+    await applyAppearance(appearances.setIcon(id, null));
   }
 
   /// Guided enable for system-wide rotation (Accessibility + WRITE_SETTINGS).
@@ -1636,6 +1777,12 @@ class MorphController extends ChangeNotifier {
     dockVisible = true;
     occupancySeeded = false;
     homeWidgets = const [];
+    autoArrange = false;
+    hiddenIds = const [];
+    folders = const [];
+    chromeFlags = const MorphChromeFlags();
+    sidebar = const SidebarStrip();
+    appearances = const AppAppearanceStore();
     starredAppIds = const [];
     launchCounts = {};
     rotationAction = RotationAction.sensor;

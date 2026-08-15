@@ -467,6 +467,126 @@ class SystemMorphBridge {
       return false;
     }
   }
+
+  static Future<bool> openAppInfo(String packageName) async {
+    if (!isAndroid || packageName.isEmpty) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'openAppInfo',
+        {'packageName': packageName},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> runShortcut(String action, {String? packageName}) async {
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'runShortcut',
+        {'action': action, 'packageName': packageName ?? ''},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getShadeSnapshot() async {
+    if (!isAndroid) return const {};
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('getShadeSnapshot');
+      return raw ?? const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static Future<Map<String, dynamic>> toggleShadeTile(String id) async {
+    if (!isAndroid) return const {};
+    try {
+      final raw = await _channel.invokeMapMethod<String, dynamic>(
+        'toggleShadeTile',
+        {'id': id},
+      );
+      return raw ?? const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static Future<bool> setBrightness(double value) async {
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'setBrightness',
+        {'value': value.clamp(0.0, 1.0)},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> islandCommand(String command) async {
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'islandCommand',
+        {'command': command},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> getIslandSnapshot() async {
+    if (!isAndroid) return const {};
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('getIslandSnapshot');
+      return raw ?? const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static Future<void> syncChrome(Map<String, dynamic> flags) async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('syncChrome', flags);
+    } catch (_) {}
+  }
+
+  static Future<void> setHomeVisible(bool visible) async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('setHomeVisible', {'visible': visible});
+    } catch (_) {}
+  }
+
+  static Future<void> openNotificationListenerSettings() async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('openNotificationListenerSettings');
+    } catch (_) {}
+  }
+
+  static const _chromeEvents = EventChannel('com.zibashu.morphos/chrome');
+
+  static Stream<Map<String, dynamic>> chromeEventStream() {
+    if (!isAndroid) return const Stream.empty();
+    return _chromeEvents.receiveBroadcastStream().map((raw) {
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry('$k', v));
+      }
+      return <String, dynamic>{};
+    });
+  }
 }
 
 /// Result of opening the system Home-role / Home-settings UI.

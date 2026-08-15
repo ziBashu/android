@@ -407,11 +407,12 @@ void main() {
     });
 
     test('minus-menu choices distinguish home-remove vs uninstall', () {
-      expect(IconMinusMenu.choices, [
+      expect(IconActionMenu.removeCascade, [
         'Delete from Home screen',
         'Delete application',
         'Cancel',
       ]);
+      expect(IconMinusMenu.choices, IconActionMenu.removeCascade);
       expect(IconMinusMenu.isHomeRemove(IconMinusMenu.deleteFromHomeScreen),
           isTrue);
       expect(IconMinusMenu.isUninstall(IconMinusMenu.deleteApplication), isTrue);
@@ -420,6 +421,8 @@ void main() {
           isFalse);
       expect(IconMinusMenu.isHomeRemove(IconMinusMenu.deleteApplication),
           isFalse);
+      expect(IconActionMenu.firstLevel(id: 'maps'), isNot(contains('Delete')));
+      expect(IconActionMenu.firstLevel(id: 'maps'), isNot(contains('Cancel')));
     });
 
     test('minus Delete from Home drops dock icon without moving it to home',
@@ -621,6 +624,10 @@ void main() {
     expect(minus.contains('IconMinusMenu.deleteFromHomeScreen'), isTrue);
     expect(minus.contains('IconMinusMenu.deleteApplication'), isTrue);
     expect(minus.contains('IconMinusMenu.cancel'), isTrue);
+    expect(
+      File('lib/features/home/icon_action_sheet.dart').readAsStringSync(),
+      contains('App info'),
+    );
 
     expect(settings.contains('Home widgets'), isTrue);
     expect(settings.contains('HomeWidgetKind.values'), isTrue);

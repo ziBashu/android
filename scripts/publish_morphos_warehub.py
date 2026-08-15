@@ -15,14 +15,14 @@ KEY = str(Path.home() / ".ssh" / "id_ed25519")
 SITE = "/www/wwwroot/ziBashu4.com"
 
 ANDROID_ROOT = Path.home() / "ANDROID"
-APK_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.1.2-warehub.apk"
-AAB_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.1.2-play.aab"
+APK_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.0-warehub.apk"
+AAB_LOCAL = ANDROID_ROOT / "dist" / "morphos-v1.2.0-play.aab"
 ICON_LOCAL = (
     ANDROID_ROOT / "apps" / "morphos" / "assets" / "brand" / "morphos_launcher_1024.png"
 )
 
-VERSION_NAME = "1.1.2"
-VERSION_CODE = 14
+VERSION_NAME = "1.2.0"
+VERSION_CODE = 15
 SLUG = "morphos"
 PACKAGE = "com.zibashu.morphos"
 
@@ -116,9 +116,9 @@ def main() -> None:
         "apk_path": apk_rel,
         "platforms": platforms,
         "changelog": (
-            f"v{VERSION_NAME}: add apps to Home, optional clock, Verdant Emerald wallpaper, "
-            "real launcher icons, notes file path, browser search + weather widgets, "
-            "App Library tap opens the app."
+            f"v{VERSION_NAME}: App info / Select / Hide / Remove / Edit Homescreen, "
+            "named folders, void occupancy, Morph shade, Smart Island, sidebar, "
+            "all-apps name/icon/size."
         ),
         "tags": ["offline", "launcher", "home", "tools"],
         "is_featured": 1,
