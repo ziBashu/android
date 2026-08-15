@@ -54,7 +54,10 @@ class AdaptiveEngine {
   Future<void> _tickCharge() async {
     if (!controller.chargeMorphEnabled) return;
     try {
-      final state = await _battery.batteryState;
+      final state = await _battery.batteryState.timeout(
+        const Duration(milliseconds: 80),
+        onTimeout: () => BatteryState.unknown,
+      );
       await _onBattery(state);
     } catch (_) {}
   }

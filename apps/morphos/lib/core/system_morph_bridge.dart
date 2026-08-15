@@ -10,9 +10,22 @@ class SystemMorphBridge {
   static const _channel = MethodChannel('com.zibashu.morphos/system');
   static const _launcherEvents =
       EventChannel('com.zibashu.morphos/launcher');
+  static const _batteryEvents =
+      EventChannel('com.zibashu.morphos/battery');
 
   static bool get isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// Live `ACTION_BATTERY_CHANGED` extras as they arrive (plus sticky first).
+  static Stream<Map<String, dynamic>> batteryEventStream() {
+    if (!isAndroid) return const Stream.empty();
+    return _batteryEvents.receiveBroadcastStream().map((raw) {
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry('$k', v));
+      }
+      return <String, dynamic>{};
+    });
+  }
 
   /// Stream of native launcher events: `{type: home|launcher|resume, ...}`.
   static Stream<Map<String, dynamic>> launcherEventStream() {
@@ -266,6 +279,194 @@ class SystemMorphBridge {
 
   static bool _looksLikePackage(String id) =>
       id.contains('.') && !id.contains(' ') && id.length > 3;
+
+  /// MAIN+LAUNCHER rows from PackageManager (locale-accurate labels).
+  static Future<List<Map<String, dynamic>>> queryLauncherApps() async {
+    if (!isAndroid) return const [];
+    try {
+      final raw = await _channel.invokeMethod<List<dynamic>>('queryLauncherApps');
+      if (raw == null) return const [];
+      return raw
+          .whereType<Map>()
+          .map((e) => e.map((k, v) => MapEntry('$k', v)))
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Sticky `ACTION_BATTERY_CHANGED` extras.
+  static Future<Map<String, dynamic>> getBatteryExtras() async {
+    if (!isAndroid) return const {};
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('getBatteryExtras');
+      return raw ?? const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static Future<bool> setSystemWallpaper(List<int> bytes) async {
+    if (!isAndroid || bytes.isEmpty) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'setSystemWallpaper',
+        {'bytes': bytes},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Real MAIN+LAUNCHER icons as PNG bytes, keyed by package name.
+  static Future<Map<String, List<int>>> getLauncherIcons(
+    List<String> packages,
+  ) async {
+    if (!isAndroid || packages.isEmpty) return const {};
+    try {
+      final raw = await _channel.invokeMapMethod<String, dynamic>(
+        'getLauncherIcons',
+        {'packages': packages},
+      );
+      if (raw == null) return const {};
+      final out = <String, List<int>>{};
+      raw.forEach((k, v) {
+        if (v is List<int>) {
+          out[k] = v;
+        } else if (v is Uint8List) {
+          out[k] = v;
+        }
+      });
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static Future<List<int>?> getLauncherIcon(String packageName) async {
+    if (!isAndroid || packageName.isEmpty) return null;
+    try {
+      final raw = await _channel.invokeMethod<dynamic>(
+        'getLauncherIcon',
+        {'packageName': packageName},
+      );
+      if (raw is Uint8List) return raw;
+      if (raw is List<int>) return raw;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, String>> notesPaths() async {
+    if (!isAndroid) {
+      return const {
+        'appPath': '',
+        'publicPath': '',
+      };
+    }
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('notesPaths');
+      return {
+        'appPath': '${raw?['appPath'] ?? ''}',
+        'publicPath': '${raw?['publicPath'] ?? ''}',
+      };
+    } catch (_) {
+      return const {'appPath': '', 'publicPath': ''};
+    }
+  }
+
+  static Future<String?> readNotesJson() async {
+    if (!isAndroid) return null;
+    try {
+      return await _channel.invokeMethod<String>('readNotesJson');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, String>> writeNotesJson(String json) async {
+    if (!isAndroid) return const {'appPath': '', 'publicPath': ''};
+    try {
+      final raw = await _channel.invokeMapMethod<String, dynamic>(
+        'writeNotesJson',
+        {'json': json},
+      );
+      return {
+        'appPath': '${raw?['appPath'] ?? ''}',
+        'publicPath': '${raw?['publicPath'] ?? ''}',
+      };
+    } catch (_) {
+      return const {'appPath': '', 'publicPath': ''};
+    }
+  }
+
+  static Future<bool> openWebSearch(String query) async {
+    if (query.trim().isEmpty) return false;
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'openWebSearch',
+        {'query': query.trim()},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, String>> getDefaultBrowser() async {
+    if (!isAndroid) return const {'packageName': '', 'label': ''};
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('getDefaultBrowser');
+      return {
+        'packageName': '${raw?['packageName'] ?? ''}',
+        'label': '${raw?['label'] ?? ''}',
+      };
+    } catch (_) {
+      return const {'packageName': '', 'label': ''};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getLastLocation() async {
+    if (!isAndroid) {
+      return const {'ok': false, 'needPermission': false};
+    }
+    try {
+      final raw =
+          await _channel.invokeMapMethod<String, dynamic>('getLastLocation');
+      return raw ?? const {'ok': false, 'needPermission': false};
+    } catch (_) {
+      return const {'ok': false, 'needPermission': false};
+    }
+  }
+
+  static Future<bool> requestLocationPermission() async {
+    if (!isAndroid) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>('requestLocationPermission');
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> requestUninstall(String packageName) async {
+    if (!isAndroid || packageName.isEmpty) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'requestUninstall',
+        {'packageName': packageName},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 /// Result of opening the system Home-role / Home-settings UI.

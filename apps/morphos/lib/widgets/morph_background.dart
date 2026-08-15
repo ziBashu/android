@@ -43,6 +43,16 @@ class MorphBackground extends StatelessWidget {
             child: child,
           );
 
+    Widget fallbackGradient() => DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: colors,
+            ),
+          ),
+        );
+
     if (custom != null && custom.isNotEmpty) {
       return Material(
         color: colors.last,
@@ -54,15 +64,28 @@ class MorphBackground extends StatelessWidget {
                 Uint8List.fromList(custom),
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
-                errorBuilder: (_, __, ___) => DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: colors,
-                    ),
-                  ),
-                ),
+                errorBuilder: (_, __, ___) => fallbackGradient(),
+              ),
+              if (content != null) content,
+            ],
+          ),
+        ),
+      );
+    }
+
+    final asset = wallpaperId.assetPath;
+    if (asset != null) {
+      return Material(
+        color: colors.last,
+        child: SizedBox.expand(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(
+                asset,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => fallbackGradient(),
               ),
               if (content != null) content,
             ],

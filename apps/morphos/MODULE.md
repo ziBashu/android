@@ -11,12 +11,12 @@
 | Auth | none |
 | Guest behavior | full offline + optional device app list |
 | Backend routes | none (Phase 5 store offline; online later) |
-| Local storage | SharedPreferences `morphos_state_v2` + native `morphos_system_v1` |
-| Permissions | INTERNET, VIBRATE, RECEIVE_BOOT_COMPLETED, QUERY_ALL_PACKAGES, SET_WALLPAPER, SET_WALLPAPER_HINTS, WRITE_SETTINGS, SYSTEM_ALERT_WINDOW, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, READ_MEDIA_IMAGES, Accessibility, QS tile |
+| Local storage | SharedPreferences `morphos_state_v2` + native `morphos_system_v1` + `Documents/MorphOS/notes.json` |
+| Permissions | INTERNET, VIBRATE, RECEIVE_BOOT_COMPLETED, QUERY_ALL_PACKAGES, SET_WALLPAPER, SET_WALLPAPER_HINTS, WRITE_SETTINGS, SYSTEM_ALERT_WINDOW, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, READ_MEDIA_IMAGES, ACCESS_COARSE_LOCATION, Accessibility, QS tile |
 | Distribution | warehub (Play later) |
 | Web fallback | `/hub` |
 | Blurb | Personal adaptive environment — global home launcher, productivity widgets, morph packs. |
-| Version | **`1.1.1+13`** |
+| Version | **`1.1.2+14`** |
 | Launcher icon | Custom ziBashu brand mark (`assets/brand/morphos_launcher_1024.png`) — not Flutter default |
 
 ## Product identity
@@ -78,6 +78,7 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 | 0.7.1 Phone connection | Device app detect + rename/icon · system rotation permissions |
 | **1.0.0 Global launcher** | HOME role CTA · productivity strip · ranked search · dual wallpapers · icon crop |
 | **1.1.0 Home root** | LauncherOS task flags · Home pop-to-root · Back = moveTaskToBack |
+| **1.1.2 Home polish** | Add App · clock optional · Verdant Emerald default wallpaper · real launcher icons · notes file path · browser search + weather widgets · App Library tap opens |
 | 6+ Custom ROM | Long-term vision (not this APK) |
 
 ## Hardening
@@ -94,9 +95,9 @@ Canonical product design: **`docs/morphos-product-vision.md`** (12 questions + f
 - [x] Custom MorphOS launcher icon (ziBashu forest/cream + brand mark)
 - [x] Demo/offline when device APIs fail
 - [x] analyze / unit tests / harden_check
-- [x] Warehub upload **v1.1.0** — https://zibashu4.com/hub/warehub/morphos
+- [x] Warehub upload **v1.1.2** — https://zibashu4.com/hub/warehub/morphos
 - [x] Dual signed release (upload keystore): warehub APK + Play AAB in `dist/`
-- [ ] Play Console upload (AAB ready; Internal track when requested)
+- [ ] Play Console upload (AAB ready at `dist/morphos-v1.1.2-play.aab`; Internal track when requested)
 
 ## References
 

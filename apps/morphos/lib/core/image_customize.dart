@@ -70,4 +70,32 @@ class ImageCustomize {
     if (bytes.length > 900 * 1024) return false;
     return true;
   }
+
+  /// Rasterize a vertical gradient so MorphOS can push it as the system wallpaper.
+  static Uint8List gradientJpeg({
+    required int topArgb,
+    required int bottomArgb,
+    int width = 540,
+    int height = 960,
+    int jpegQuality = 80,
+  }) {
+    final image = img.Image(width: width, height: height);
+    final tr = (topArgb >> 16) & 0xFF;
+    final tg = (topArgb >> 8) & 0xFF;
+    final tb = topArgb & 0xFF;
+    final br = (bottomArgb >> 16) & 0xFF;
+    final bg = (bottomArgb >> 8) & 0xFF;
+    final bb = bottomArgb & 0xFF;
+    for (var y = 0; y < height; y++) {
+      final t = height == 1 ? 0.0 : y / (height - 1);
+      final r = (tr + (br - tr) * t).round().clamp(0, 255);
+      final g = (tg + (bg - tg) * t).round().clamp(0, 255);
+      final b = (tb + (bb - tb) * t).round().clamp(0, 255);
+      final color = img.ColorRgb8(r, g, b);
+      for (var x = 0; x < width; x++) {
+        image.setPixel(x, y, color);
+      }
+    }
+    return Uint8List.fromList(img.encodeJpg(image, quality: jpegQuality));
+  }
 }

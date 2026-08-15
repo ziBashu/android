@@ -21,6 +21,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('factory home wallpaper is Verdant Emerald', () async {
+    final c = MorphController();
+    await c.load();
+    expect(c.wallpaperId, WallpaperId.verdantEmerald);
+    expect(WallpaperId.verdantEmerald.assetPath, isNotNull);
+  });
+
   test('MorphEngine applyProfile switches pack', () async {
     final c = MorphController();
     await c.load();
@@ -351,9 +358,12 @@ void main() {
   test('RotationAction cycles and maps modes', () {
     expect(RotationAction.sensor.next, RotationAction.portrait);
     expect(RotationAction.portrait.next, RotationAction.landscape);
-    expect(RotationAction.landscape.next, RotationAction.reverseLandscape);
+    expect(RotationAction.landscape.next, RotationAction.reversePortrait);
+    expect(RotationAction.reversePortrait.next, RotationAction.reverseLandscape);
     expect(RotationAction.reverseLandscape.next, RotationAction.sensor);
     expect(RotationActionX.fromMode('landscape'), RotationAction.landscape);
+    expect(RotationActionX.fromMode('reversePortrait'),
+        RotationAction.reversePortrait);
     expect(RotationAction.portrait.mode, 'portrait');
     expect(RotationAction.sensor.shortLabel, 'AUTO');
   });

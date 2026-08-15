@@ -1,9 +1,16 @@
 package com.zibashu.morphos
 
+import android.Manifest
 import android.app.Activity
+import android.app.SearchManager
+import android.app.WallpaperManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.hardware.display.DisplayManager
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -146,11 +153,46 @@ class MorphSystemBridge(
             "isHomeIntent" -> {
                 result.success(MainActivity.isHomeIntent(activityRef.get()?.intent))
             }
+            "queryLauncherApps" -> result.success(queryLauncherApps())
+            "getLauncherIcons" -> {
+                val pkgs = call.argument<List<Any?>>("packages")
+                    ?.mapNotNull { it?.toString() }
+                    ?.filter { it.isNotBlank() }
+                    ?: emptyList()
+                result.success(MorphLauncherIcons.batch(context, pkgs))
+            }
+            "getLauncherIcon" -> {
+                val pkg = call.argument<String>("packageName") ?: ""
+                result.success(MorphLauncherIcons.pngFor(context, pkg))
+            }
+            "notesPaths" -> result.success(MorphNotesIo.paths(context))
+            "readNotesJson" -> result.success(MorphNotesIo.read(context))
+            "writeNotesJson" -> {
+                val json = call.argument<String>("json") ?: "[]"
+                result.success(MorphNotesIo.write(context, json))
+            }
+            "openWebSearch" -> {
+                val q = call.argument<String>("query") ?: ""
+                result.success(openWebSearch(q))
+            }
+            "getDefaultBrowser" -> result.success(defaultBrowser())
+            "getLastLocation" -> result.success(lastLocation())
+            "requestLocationPermission" -> result.success(requestLocationPermission())
+            "getBatteryExtras" -> result.success(batteryExtras())
+            "setSystemWallpaper" -> {
+                val bytes = call.argument<ByteArray>("bytes")
+                result.success(setSystemWallpaper(bytes))
+            }
+            "requestUninstall" -> {
+                val pkg = call.argument<String>("packageName") ?: ""
+                result.success(requestUninstall(pkg))
+            }
             "cycleOrientationMode" -> {
                 val modes = listOf(
                     "sensor",
                     "portrait",
                     "landscape",
+                    "reversePortrait",
                     "reverseLandscape",
                 )
                 val current = MorphOrientationStore.globalMode(context)
@@ -163,6 +205,89 @@ class MorphSystemBridge(
             }
             "getDisplayInfo" -> result.success(displayInfo())
             else -> result.notImplemented()
+        }
+    }
+
+    private fun queryLauncherApps(): List<Map<String, Any?>> {
+        return try {
+            val pm = context.packageManager
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val flags = if (Build.VERSION.SDK_INT >= 23) {
+                PackageManager.MATCH_ALL
+            } else {
+                0
+            }
+            val resolves = pm.queryIntentActivities(intent, flags)
+            resolves.mapNotNull { ri ->
+                val info = ri.activityInfo ?: return@mapNotNull null
+                val pkg = info.packageName ?: return@mapNotNull null
+                val label = try {
+                    ri.loadLabel(pm)?.toString()?.trim().orEmpty()
+                } catch (_: Exception) {
+                    ""
+                }
+                mapOf(
+                    "packageName" to pkg,
+                    "activity" to info.name,
+                    "label" to label,
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun batteryExtras(): Map<String, Any?> {
+        return try {
+            val intent = context.registerReceiver(
+                null,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            )
+            if (intent == null) {
+                emptyMap()
+            } else {
+                MorphBatteryStream.extrasFrom(intent)
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun setSystemWallpaper(bytes: ByteArray?): Boolean {
+        if (bytes == null || bytes.isEmpty()) return false
+        return try {
+            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return false
+            val wm = WallpaperManager.getInstance(context)
+            if (Build.VERSION.SDK_INT >= 24) {
+                wm.setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM)
+            } else {
+                @Suppress("DEPRECATION")
+                wm.setBitmap(bmp)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun requestUninstall(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        return try {
+            val intent = Intent(
+                Intent.ACTION_DELETE,
+                Uri.parse("package:$packageName"),
+            )
+            val act = activityRef.get()
+            if (act != null) {
+                act.startActivity(intent)
+            } else {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -226,6 +351,115 @@ class MorphSystemBridge(
                 "manufacturer" to "",
                 "model" to "",
             )
+        }
+    }
+
+    private fun openWebSearch(query: String): Boolean {
+        val q = query.trim()
+        if (q.isEmpty()) return false
+        val starter = activityRef.get() ?: context
+        val webSearch = Intent(Intent.ACTION_WEB_SEARCH)
+            .putExtra(SearchManager.QUERY, q)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            starter.startActivity(webSearch)
+            true
+        } catch (_: Exception) {
+            try {
+                val uri = Uri.parse(
+                    "https://www.google.com/search?q=${Uri.encode(q)}",
+                )
+                starter.startActivity(
+                    Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    private fun defaultBrowser(): Map<String, String> {
+        return try {
+            val view = Intent(Intent.ACTION_VIEW, Uri.parse("https://"))
+            val ri = context.packageManager.resolveActivity(view, PackageManager.MATCH_DEFAULT_ONLY)
+            val pkg = ri?.activityInfo?.packageName.orEmpty()
+            val label = try {
+                ri?.loadLabel(context.packageManager)?.toString().orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            mapOf("packageName" to pkg, "label" to label)
+        } catch (_: Exception) {
+            mapOf("packageName" to "", "label" to "")
+        }
+    }
+
+    private fun requestLocationPermission(): Boolean {
+        val act = activityRef.get() ?: return false
+        return try {
+            if (Build.VERSION.SDK_INT < 23) return true
+            if (context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return true
+            }
+            act.requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION),
+                72,
+            )
+            false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun lastLocation(): Map<String, Any?> {
+        val granted = if (Build.VERSION.SDK_INT < 23) {
+            true
+        } else {
+            context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED ||
+                context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+        }
+        if (!granted) {
+            return mapOf(
+                "ok" to false,
+                "needPermission" to true,
+            )
+        }
+        return try {
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val loc = try {
+                lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            } catch (_: Exception) {
+                null
+            } ?: try {
+                lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            } catch (_: Exception) {
+                null
+            } ?: try {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    lm.getLastKnownLocation(LocationManager.FUSED_PROVIDER)
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+            if (loc == null) {
+                mapOf("ok" to false, "needPermission" to false)
+            } else {
+                mapOf(
+                    "ok" to true,
+                    "needPermission" to false,
+                    "latitude" to loc.latitude,
+                    "longitude" to loc.longitude,
+                )
+            }
+        } catch (_: Exception) {
+            mapOf("ok" to false, "needPermission" to false)
         }
     }
 

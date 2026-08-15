@@ -94,6 +94,8 @@ class MorphPalette {
 
   static List<Color> wallpaperColors(WallpaperId id) {
     switch (id) {
+      case WallpaperId.verdantEmerald:
+        return const [Color(0xFF06241B), Color(0xFF0B3D2E), Color(0xFF1FA37A)];
       case WallpaperId.dawn:
         return const [Color(0xFF87CEEB), Color(0xFFFFE4B5), Color(0xFFFFB347)];
       case WallpaperId.nightCity:

@@ -33,7 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: MorphBackground(
-      wallpaperId: WallpaperId.cyberpunk,
+      wallpaperId: WallpaperId.verdantEmerald,
       palette: p,
       child: SafeArea(
         child: Padding(

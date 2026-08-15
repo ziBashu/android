@@ -15,6 +15,8 @@ class AppIconTile extends StatelessWidget {
     this.onLongPress,
     this.compact = false,
     this.showLabel,
+    this.showMinus = false,
+    this.onMinus,
   });
 
   final MorphAppItem app;
@@ -23,6 +25,8 @@ class AppIconTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool compact;
   final bool? showLabel;
+  final bool showMinus;
+  final VoidCallback? onMinus;
 
   MorphPalette get p => controller.palette;
 
@@ -81,6 +85,9 @@ class AppIconTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
               Container(
                 width: size,
                 height: size,
@@ -111,6 +118,34 @@ class AppIconTile extends StatelessWidget {
                   ],
                 ),
                 child: iconChild,
+              ),
+              if (showMinus)
+                Positioned(
+                  left: -6,
+                  top: -6,
+                  child: GestureDetector(
+                    onTap: onMinus ?? onLongPress,
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFB0B8C4),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text(
+                        '-',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                ],
               ),
               if (labels) ...[
                 const SizedBox(height: 4),

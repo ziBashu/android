@@ -37,6 +37,7 @@ class MorphOSApp extends StatefulWidget {
 class _MorphOSAppState extends State<MorphOSApp> {
   final MorphController _controller = MorphController();
   StreamSubscription<Map<String, dynamic>>? _launcherSub;
+  Widget? _homeHold;
 
   @override
   void initState() {
@@ -114,9 +115,12 @@ class _MorphOSAppState extends State<MorphOSApp> {
             );
           }
           if (!_controller.onboardingDone) {
+            _homeHold = null;
             return OnboardingScreen(controller: _controller);
           }
-          return HomeScreen(controller: _controller);
+          // Reuse the same HomeScreen instance so notifyListeners() does not
+          // drop state (or flash Loading) on every controller tick.
+          return _homeHold ??= HomeScreen(controller: _controller);
         },
       ),
     );

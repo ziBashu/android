@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'home_occupancy.dart';
+import 'image_customize.dart';
 import 'models.dart';
 import 'morph_pack.dart';
 import 'morph_palette.dart';
 import 'platform_chrome.dart';
+import 'productivity.dart';
 import 'system_morph_bridge.dart';
 
 /// Central MorphOS state — personal adaptive environment layer.
@@ -41,7 +44,7 @@ class MorphController extends ChangeNotifier {
   MorphThemeId themeId = MorphThemeId.neon;
   MorphLayoutId layoutId = MorphLayoutId.grid;
   IconStyleId iconStyle = IconStyleId.squircle;
-  WallpaperId wallpaperId = WallpaperId.cyberpunk;
+  WallpaperId wallpaperId = WallpaperId.verdantEmerald;
   bool showLabels = true;
   double iconScale = 1.0;
   int gridColumns = 4;
@@ -60,26 +63,31 @@ class MorphController extends ChangeNotifier {
   /// User-picked landscape wallpaper (base64 JPEG/PNG).
   String? customWallpaperLandscapeB64;
 
+  /// Last wallpaper signature pushed to WallpaperManager (breaks restart loops).
+  String? lastPushedWallpaperSig;
+
+  /// One-shot: undo leftover USER_ROTATION from older MorphOS builds.
+  bool clearedForcedLauncherRotation = false;
+
   /// User dismissed the “set as default home” banner (until next reinstall/reset).
   bool launcherSetupDismissed = false;
 
-  List<String> dockIds = const [
-    'browser',
-    'messages',
-    'music',
-    'camera',
-    'settings',
-  ];
-  List<String> homeIds = const [
-    'browser',
-    'music',
-    'notes',
-    'maps',
-    'gallery',
-    'mail',
-    'clock',
-    'store',
-  ];
+  /// One-shot: factory home wallpaper → Verdant Emerald.
+  bool migratedVerdantWallpaper = false;
+
+  List<String> dockIds = List<String>.from(HomeOccupancy.defaultDemoDock);
+  List<String> homeIds = List<String>.from(HomeOccupancy.defaultDemoHome);
+  bool dockVisible = true;
+  bool occupancySeeded = false;
+  List<HomeWidgetKind> homeWidgets = const [];
+  List<String> starredAppIds = const [];
+  Map<String, int> launchCounts = {};
+  RotationAction rotationAction = RotationAction.sensor;
+  bool rotationLocked = false;
+
+  /// Last mode actually sent to [SystemMorphBridge.applyGlobalOrientationNow].
+  /// Includes `sensor` so Auto restores accelerometer rotation.
+  String? lastAppliedOrientationMode;
 
   /// Phase 2: environment packs keyed by profile.
   final Map<MorphProfileId, MorphEnvironment> environments = {
@@ -214,7 +222,7 @@ class MorphController extends ChangeNotifier {
           wallpaperId = _enumByName(
             WallpaperId.values,
             m['wallpaperId'] as String?,
-            WallpaperId.cyberpunk,
+            WallpaperId.verdantEmerald,
           );
           showLabels = m['showLabels'] as bool? ?? true;
           iconScale = (m['iconScale'] as num?)?.toDouble() ?? 1.0;
@@ -233,10 +241,27 @@ class MorphController extends ChangeNotifier {
               m['customWallpaperPortraitB64'] as String?;
           customWallpaperLandscapeB64 =
               m['customWallpaperLandscapeB64'] as String?;
+          lastPushedWallpaperSig = m['lastPushedWallpaperSig'] as String?;
+          clearedForcedLauncherRotation =
+              m['clearedForcedLauncherRotation'] as bool? ?? false;
           launcherSetupDismissed =
               m['launcherSetupDismissed'] as bool? ?? false;
+          migratedVerdantWallpaper =
+              m['migratedVerdantWallpaper'] as bool? ?? false;
           dockIds = List<String>.from(m['dockIds'] as List? ?? dockIds);
           homeIds = List<String>.from(m['homeIds'] as List? ?? homeIds);
+          dockVisible = m['dockVisible'] as bool? ?? true;
+          occupancySeeded = m['occupancySeeded'] as bool? ?? false;
+          homeWidgets = _widgetsFrom(m['homeWidgets']);
+          starredAppIds =
+              List<String>.from(m['starredAppIds'] as List? ?? const []);
+          launchCounts = (m['launchCounts'] as Map?)?.map(
+                (k, v) => MapEntry('$k', (v as num?)?.toInt() ?? 0),
+              ) ??
+              {};
+          rotationAction =
+              RotationActionX.fromMode(m['rotationAction'] as String?);
+          rotationLocked = m['rotationLocked'] as bool? ?? false;
           timeBasedMorph = m['timeBasedMorph'] as bool? ?? false;
           perAppMorphEnabled = m['perAppMorphEnabled'] as bool? ?? true;
           chargeMorphEnabled = m['chargeMorphEnabled'] as bool? ?? true;
@@ -323,6 +348,8 @@ class MorphController extends ChangeNotifier {
         }
       }
 
+      await _migrateFactoryWallpaperIfNeeded();
+
       if (timeBasedMorph) {
         try {
           await _applyTimeBasedMorph(
@@ -343,14 +370,214 @@ class MorphController extends ChangeNotifier {
     }
 
     // Native bridge after UI is ready — never block first paint.
+    // Do not apply system-wide orientation on every boot (restarts the launcher).
     Future<void>.microtask(() async {
       try {
         await refreshSystemStatus();
-        await syncSystemMorph();
         await applyPlatformChrome();
         await _syncKeepAwake();
+        await _clearStaleForcedRotationOnce();
       } catch (_) {}
     });
+  }
+
+  /// Older installs defaulted to a gradient. This launch uses Verdant Emerald.
+  Future<void> _migrateFactoryWallpaperIfNeeded() async {
+    if (migratedVerdantWallpaper) return;
+    migratedVerdantWallpaper = true;
+    final noCustom =
+        (customWallpaperPortraitB64 == null ||
+            customWallpaperPortraitB64!.isEmpty) &&
+        (customWallpaperLandscapeB64 == null ||
+            customWallpaperLandscapeB64!.isEmpty);
+    final factoryLook =
+        wallpaperId == WallpaperId.cyberpunk ||
+        wallpaperId == WallpaperId.nightCity;
+    if (noCustom && factoryLook && profileId == MorphProfileId.phone) {
+      wallpaperId = WallpaperId.verdantEmerald;
+    }
+    try {
+      await _persist();
+    } catch (_) {}
+  }
+
+  /// Older builds wrote landscape USER_ROTATION on every home paint.
+  /// Reset to sensor exactly once so the phone is not stuck rotating.
+  Future<void> _clearStaleForcedRotationOnce() async {
+    if (clearedForcedLauncherRotation) return;
+    if (!SystemMorphBridge.isAndroid) {
+      clearedForcedLauncherRotation = true;
+      return;
+    }
+    clearedForcedLauncherRotation = true;
+    try {
+      await _persist();
+    } catch (_) {}
+    try {
+      await SystemMorphBridge.applyGlobalOrientationNow('sensor');
+    } catch (_) {}
+  }
+
+  static List<HomeWidgetKind> _widgetsFrom(dynamic raw) {
+    if (raw is! List) return const [];
+    final out = <HomeWidgetKind>[];
+    for (final e in raw) {
+      for (final k in HomeWidgetKind.values) {
+        if (k.name == '$e') out.add(k);
+      }
+    }
+    return out;
+  }
+
+  HomeOccupancy get occupancy => HomeOccupancy(
+        homeIds: homeIds,
+        dockIds: dockIds,
+        dockVisible: dockVisible,
+        widgets: homeWidgets,
+        seeded: occupancySeeded,
+      );
+
+  Future<void> applyOccupancy(HomeOccupancy next) async {
+    homeIds = List<String>.from(next.homeIds);
+    dockIds = List<String>.from(next.dockIds);
+    dockVisible = next.dockVisible;
+    homeWidgets = List<HomeWidgetKind>.from(next.widgets);
+    occupancySeeded = next.seeded;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// First-run only: commonly used apps, never the full catalog.
+  Future<void> seedOccupancyIfNeeded({
+    required List<String> catalogIds,
+    Map<String, String> labels = const {},
+    Map<String, String?> packages = const {},
+  }) async {
+    if (occupancySeeded) return;
+    if (catalogIds.isEmpty) {
+      occupancySeeded = true;
+      await _persist();
+      notifyListeners();
+      return;
+    }
+    final looksLikePackages = catalogIds.any((id) => id.contains('.'));
+    final homeLooksDemo =
+        homeIds.isEmpty || homeIds.every((id) => !id.contains('.'));
+    if (!looksLikePackages && !homeLooksDemo) {
+      occupancySeeded = true;
+      await _persist();
+      notifyListeners();
+      return;
+    }
+    final seeded = HomeOccupancy.seedCommon(
+      catalogIds: catalogIds,
+      launchCounts: launchCounts,
+      labels: labels,
+      packages: packages,
+    );
+    await applyOccupancy(seeded);
+  }
+
+  Future<void> deleteAllHomeApps() =>
+      applyOccupancy(occupancy.deleteAllOnPage().copyWith(seeded: true));
+
+  Future<void> setDockVisible(bool visible) async {
+    if (visible) {
+      await applyOccupancy(occupancy.showDock().copyWith(seeded: true));
+    } else {
+      await applyOccupancy(occupancy.hideDock().copyWith(seeded: true));
+    }
+  }
+
+  Future<void> removeFromHome(String id) =>
+      applyOccupancy(occupancy.removeFromHome(id).copyWith(seeded: true));
+
+  Future<bool> addToHome(String id) async {
+    if (id.isEmpty) return false;
+    if (homeIds.contains(id) || dockIds.contains(id)) return false;
+    await applyOccupancy(occupancy.addToHome(id).copyWith(seeded: true));
+    return homeIds.contains(id);
+  }
+
+  Future<void> addToDock(String id) =>
+      applyOccupancy(occupancy.addToDock(id).copyWith(seeded: true));
+
+  Future<void> removeFromDock(String id) =>
+      applyOccupancy(occupancy.removeFromDock(id).copyWith(seeded: true));
+
+  /// Drop [id] from home and dock with no transfer (minus → Delete from Home).
+  Future<void> removeFromLauncher(String id, {String? also}) =>
+      applyOccupancy(
+        occupancy.removeFromLauncher(id, also: also).copyWith(seeded: true),
+      );
+
+  /// Minus-menu apply path used by the home surface.
+  Future<void> applyMinusChoice(
+    String choice,
+    String id, {
+    String? packageName,
+  }) async {
+    final next = HomeMinusAction.apply(
+      occupancy: occupancy,
+      choice: choice,
+      id: id,
+      packageName: packageName,
+    );
+    await applyOccupancy(next.copyWith(seeded: true));
+  }
+
+  Future<void> toggleHomeWidget(HomeWidgetKind kind) =>
+      applyOccupancy(occupancy.toggleWidget(kind).copyWith(seeded: true));
+
+  Future<void> addHomeWidget(HomeWidgetKind kind) =>
+      applyOccupancy(occupancy.addWidget(kind).copyWith(seeded: true));
+
+  Future<void> removeHomeWidget(HomeWidgetKind kind) =>
+      applyOccupancy(occupancy.removeWidget(kind).copyWith(seeded: true));
+
+  Future<void> recordLaunch(String id) async {
+    final next = Map<String, int>.from(launchCounts);
+    next[id] = (next[id] ?? 0) + 1;
+    launchCounts = next;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> toggleStar(String id) async {
+    if (starredAppIds.contains(id)) {
+      starredAppIds = starredAppIds.where((x) => x != id).toList();
+    } else {
+      starredAppIds = [...starredAppIds, id];
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setStarred(List<String> ids) async {
+    starredAppIds = List<String>.from(ids);
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setRotationControl(RotationControl control) async {
+    rotationAction = control.action;
+    rotationLocked = control.locked;
+    await applyOrientation(force: true);
+    // Always write the mode, including sensor — otherwise Auto never
+    // re-enables ACCELEROMETER_ROTATION after a forced USER_ROTATION.
+    final mode = RotationControl.systemModeToApply(control);
+    lastAppliedOrientationMode = mode;
+    try {
+      await SystemMorphBridge.applyGlobalOrientationNow(mode);
+    } catch (_) {}
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setRotationLocked(bool locked) async {
+    rotationLocked = locked;
+    await _persist();
+    notifyListeners();
   }
 
   static T _enumByName<T extends Enum>(
@@ -387,9 +614,19 @@ class MorphController extends ChangeNotifier {
         'iconOverridesB64': iconOverridesB64,
         'customWallpaperPortraitB64': customWallpaperPortraitB64,
         'customWallpaperLandscapeB64': customWallpaperLandscapeB64,
+        'lastPushedWallpaperSig': lastPushedWallpaperSig,
+        'clearedForcedLauncherRotation': clearedForcedLauncherRotation,
         'launcherSetupDismissed': launcherSetupDismissed,
+        'migratedVerdantWallpaper': migratedVerdantWallpaper,
         'dockIds': dockIds,
         'homeIds': homeIds,
+        'dockVisible': dockVisible,
+        'occupancySeeded': occupancySeeded,
+        'homeWidgets': homeWidgets.map((w) => w.name).toList(),
+        'starredAppIds': starredAppIds,
+        'launchCounts': launchCounts,
+        'rotationAction': rotationAction.mode,
+        'rotationLocked': rotationLocked,
         'timeBasedMorph': timeBasedMorph,
         'perAppMorphEnabled': perAppMorphEnabled,
         'chargeMorphEnabled': chargeMorphEnabled,
@@ -474,19 +711,19 @@ class MorphController extends ChangeNotifier {
     showLabels = env.showLabels;
     iconScale = env.iconScale;
     gridColumns = env.gridColumns;
-    dockIds = List<String>.from(env.dockIds);
-    homeIds = List<String>.from(env.homeIds);
+    if (!occupancySeeded) {
+      dockIds = List<String>.from(env.dockIds);
+      homeIds = List<String>.from(env.homeIds);
+    }
     quietMode = env.quietMode;
     largeTargets = env.largeTargets;
     // Layout resolved live via [layoutForSize]; seed portrait default.
     layoutId = env.layoutPortrait;
     lastMorphReason = reason;
     morphGeneration++;
-    // Only rotate when home has painted once (avoids black / width=0).
+    // Home activity stays sensor/portrait. Never push wallpaper or
+    // system rotation here — those restart the launcher on MIUI.
     await applyOrientation(force: false);
-    if (orientationUnlocked) {
-      unawaited(syncSystemMorph());
-    }
     unawaited(applyPlatformChrome());
     unawaited(_syncKeepAwake());
     if (persist) await _persist();
@@ -802,15 +1039,12 @@ class MorphController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Push active profile orientation + per-app rules to native layer.
+  /// Push per-app orientation rules only. Does **not** write a global
+  /// USER_ROTATION — that rotates (and often kills) the home activity.
   Future<void> syncSystemMorph() async {
     if (!SystemMorphBridge.isAndroid) return;
     try {
       if (systemMorphEnabled) {
-        // Prefer force-apply so reaction is immediate when WRITE_SETTINGS is OK.
-        await SystemMorphBridge.applyGlobalOrientationNow(
-          profileId.systemOrientationMode,
-        );
         await SystemMorphBridge.syncPackageRules(
           SystemMorphBridge.rulesFromAppMorph(appRules),
         );
@@ -935,6 +1169,7 @@ class MorphController extends ChangeNotifier {
     wallpaperId = id;
     await _persist();
     notifyListeners();
+    unawaited(pushSystemWallpaper(force: true));
   }
 
   /// Custom portrait/landscape wallpapers from user media (MorphOS home only).
@@ -965,6 +1200,7 @@ class MorphController extends ChangeNotifier {
     }
     await _persist();
     notifyListeners();
+    unawaited(pushSystemWallpaper(force: true));
   }
 
   Future<void> clearCustomWallpapers() async {
@@ -972,6 +1208,47 @@ class MorphController extends ChangeNotifier {
     customWallpaperLandscapeB64 = null;
     await _persist();
     notifyListeners();
+    unawaited(pushSystemWallpaper(force: true));
+  }
+
+  bool systemWallpaperPushed = false;
+
+  /// Push MorphOS wallpaper to the system so recents uses it (not OEM home).
+  /// Once per process unless [force] — setBitmap restarts the launcher on MIUI.
+  Future<bool> pushSystemWallpaper({
+    bool landscape = false,
+    bool force = false,
+  }) async {
+    if (!SystemMorphBridge.isAndroid) return false;
+    final sig =
+        '${wallpaperId.name}|${customWallpaperPortraitB64?.length ?? 0}|${customWallpaperLandscapeB64?.length ?? 0}';
+    if (!force &&
+        (systemWallpaperPushed || lastPushedWallpaperSig == sig)) {
+      systemWallpaperPushed = true;
+      return true;
+    }
+    // Persist first so a MIUI activity-kill cannot loop setBitmap forever.
+    lastPushedWallpaperSig = sig;
+    systemWallpaperPushed = true;
+    try {
+      await _persist();
+    } catch (_) {}
+    try {
+      final custom = customWallpaperFor(landscape: landscape);
+      if (custom != null && custom.isNotEmpty) {
+        return SystemMorphBridge.setSystemWallpaper(custom);
+      }
+      final colors = MorphPalette.wallpaperColors(wallpaperId);
+      final bytes = ImageCustomize.gradientJpeg(
+        topArgb: colors.first.toARGB32(),
+        bottomArgb: colors.last.toARGB32(),
+        width: 540,
+        height: 960,
+      );
+      return SystemMorphBridge.setSystemWallpaper(bytes);
+    } catch (_) {
+      return false;
+    }
   }
 
   List<int>? get customWallpaperPortraitBytes {
@@ -1257,29 +1534,49 @@ class MorphController extends ChangeNotifier {
     }
   }
 
-  /// Unlock multi-orientation after first home frame with a valid size.
+  /// Unlock after first home frame. Launcher stays sensor — never landscape-lock.
   Future<void> unlockOrientationAfterFirstFrame() async {
     if (orientationUnlocked) return;
     orientationUnlocked = true;
     await applyOrientation(force: true);
-    unawaited(syncSystemMorph());
   }
 
-  /// Apply orientation for active morph.
-  /// Until [orientationUnlocked], always portrait (prevents black width=0 screen).
+  /// Orientations for the MorphOS **home activity**.
+  ///
+  /// Profiles may prefer landscape, but applying that to the launcher
+  /// flips the phone on every boot and restarts the activity (Loading…).
+  List<DeviceOrientation> launcherPreferredOrientations() {
+    if (!orientationUnlocked || !onboardingDone) {
+      return const [DeviceOrientation.portraitUp];
+    }
+    if (rotationLocked || rotationAction != RotationAction.sensor) {
+      return _orientationsFor(rotationAction);
+    }
+    return DeviceOrientation.values;
+  }
+
+  /// Apply orientation for the home activity only (not system USER_ROTATION).
   Future<void> applyOrientation({bool force = false}) async {
     try {
-      if (!orientationUnlocked || !onboardingDone) {
-        await SystemChrome.setPreferredOrientations(const [
-          DeviceOrientation.portraitUp,
-        ]);
-        return;
-      }
       if (!force && !onboardingDone) return;
-      await SystemChrome.setPreferredOrientations(profileId.orientations);
+      await SystemChrome.setPreferredOrientations(
+        launcherPreferredOrientations(),
+      );
     } catch (_) {
       // Ignore in unit tests / headless environments.
     }
+  }
+
+  static List<DeviceOrientation> _orientationsFor(RotationAction action) {
+    return switch (action) {
+      RotationAction.sensor => DeviceOrientation.values,
+      RotationAction.portrait => const [DeviceOrientation.portraitUp],
+      RotationAction.landscape => const [DeviceOrientation.landscapeLeft],
+      RotationAction.reversePortrait => const [DeviceOrientation.portraitDown],
+      RotationAction.reverseLandscape => const [
+          DeviceOrientation.landscapeRight,
+        ],
+    };
   }
 
   Future<void> resetAll() async {
@@ -1332,8 +1629,17 @@ class MorphController extends ChangeNotifier {
     customWallpaperPortraitB64 = null;
     customWallpaperLandscapeB64 = null;
     launcherSetupDismissed = false;
-    dockIds = List<String>.from(env.dockIds);
-    homeIds = List<String>.from(env.homeIds);
+    migratedVerdantWallpaper = true;
+    wallpaperId = WallpaperId.verdantEmerald;
+    dockIds = List<String>.from(HomeOccupancy.defaultDemoDock);
+    homeIds = List<String>.from(HomeOccupancy.defaultDemoHome);
+    dockVisible = true;
+    occupancySeeded = false;
+    homeWidgets = const [];
+    starredAppIds = const [];
+    launchCounts = {};
+    rotationAction = RotationAction.sensor;
+    rotationLocked = false;
     await applyOrientation();
     notifyListeners();
   }

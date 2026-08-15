@@ -56,34 +56,96 @@ class AppSearch {
   }
 
   /// Filter + rank apps. Empty query returns [apps] sorted A–Z by label.
+  /// When [starredIds] is set, those apps sort above the rest.
   static List<MorphAppItem> rank(
     List<MorphAppItem> apps,
     String query, {
     String Function(MorphAppItem)? labelOf,
+    Iterable<String> starredIds = const [],
   }) {
     final q = query.trim();
+    List<MorphAppItem> ranked;
     if (q.isEmpty) {
-      final copy = List<MorphAppItem>.from(apps);
-      copy.sort((a, b) {
+      ranked = List<MorphAppItem>.from(apps);
+      ranked.sort((a, b) {
         final la = (labelOf?.call(a) ?? a.label).toLowerCase();
         final lb = (labelOf?.call(b) ?? b.label).toLowerCase();
         return la.compareTo(lb);
       });
-      return copy;
+    } else {
+      final scored = <({MorphAppItem app, int score})>[];
+      for (final app in apps) {
+        final s = scoreApp(app, q, labelOf: labelOf);
+        if (s > 0) scored.add((app: app, score: s));
+      }
+      scored.sort((a, b) {
+        final byScore = b.score.compareTo(a.score);
+        if (byScore != 0) return byScore;
+        final la = (labelOf?.call(a.app) ?? a.app.label).toLowerCase();
+        final lb = (labelOf?.call(b.app) ?? b.app.label).toLowerCase();
+        return la.compareTo(lb);
+      });
+      ranked = scored.map((e) => e.app).toList();
     }
+    return pinStars(ranked, starredIds);
+  }
 
-    final scored = <({MorphAppItem app, int score})>[];
-    for (final app in apps) {
-      final s = scoreApp(app, q, labelOf: labelOf);
-      if (s > 0) scored.add((app: app, score: s));
+  /// Latin first letter A–Z, or `*` for non-English / non-Latin labels.
+  static String indexBucket(String label) {
+    final t = label.trim();
+    if (t.isEmpty) return '*';
+    final code = t.toUpperCase().codeUnitAt(0);
+    if (code >= 65 && code <= 90) {
+      return String.fromCharCode(code);
     }
-    scored.sort((a, b) {
-      final byScore = b.score.compareTo(a.score);
-      if (byScore != 0) return byScore;
-      final la = (labelOf?.call(a.app) ?? a.app.label).toLowerCase();
-      final lb = (labelOf?.call(b.app) ?? b.app.label).toLowerCase();
-      return la.compareTo(lb);
-    });
-    return scored.map((e) => e.app).toList(growable: false);
+    return '*';
+  }
+
+  /// Side-index map. Keys are `*` then A–Z, only buckets that have apps.
+  static Map<String, List<MorphAppItem>> bucketByIndex(
+    List<MorphAppItem> apps, {
+    String Function(MorphAppItem)? labelOf,
+  }) {
+    final buckets = <String, List<MorphAppItem>>{};
+    for (final app in apps) {
+      final label = labelOf?.call(app) ?? app.label;
+      final key = indexBucket(label);
+      buckets.putIfAbsent(key, () => []).add(app);
+    }
+    final ordered = <String, List<MorphAppItem>>{};
+    if (buckets.containsKey('*')) {
+      ordered['*'] = buckets['*']!;
+    }
+    for (var c = 65; c <= 90; c++) {
+      final k = String.fromCharCode(c);
+      final list = buckets[k];
+      if (list != null && list.isNotEmpty) ordered[k] = list;
+    }
+    return ordered;
+  }
+
+  static bool isStarred(MorphAppItem app, Iterable<String> starredIds) {
+    final set = starredIds is Set<String> ? starredIds : starredIds.toSet();
+    if (set.contains(app.id)) return true;
+    final pkg = app.packageName;
+    return pkg != null && set.contains(pkg);
+  }
+
+  /// Starred apps first, original relative order otherwise.
+  static List<MorphAppItem> pinStars(
+    List<MorphAppItem> apps,
+    Iterable<String> starredIds,
+  ) {
+    if (starredIds.isEmpty) return List<MorphAppItem>.from(apps);
+    final stars = <MorphAppItem>[];
+    final rest = <MorphAppItem>[];
+    for (final app in apps) {
+      if (isStarred(app, starredIds)) {
+        stars.add(app);
+      } else {
+        rest.add(app);
+      }
+    }
+    return [...stars, ...rest];
   }
 }

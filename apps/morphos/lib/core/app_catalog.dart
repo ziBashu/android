@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:installed_apps/installed_apps.dart';
 
+import 'launcher_listing.dart';
 import 'models.dart';
+import 'system_morph_bridge.dart';
 
 /// Loads launcher-visible apps from the phone. Falls back to demo catalog.
 ///
@@ -21,83 +23,65 @@ class AppCatalog {
   int deviceAppCount = 0;
   String? lastError;
 
-  /// Include more system packages (Maps, Phone, …) when true.
-  bool includeSystemApps = false;
+  /// Include system packages that still expose a launcher icon.
+  bool includeSystemApps = true;
 
   Future<void> refresh({bool loadIcons = true}) async {
     loading = true;
     lastError = null;
     try {
-      if (kIsWeb) {
+      if (kIsWeb || !SystemMorphBridge.isAndroid) {
         apps = List<MorphAppItem>.from(kDemoApps);
         usingDeviceApps = false;
         deviceAppCount = 0;
         return;
       }
 
-      List<AppInfo> installed;
+      var mapped = <MorphAppItem>[];
       try {
-        // Labels first — full icon decode of all packages can OOM.
-        installed = await InstalledApps.getInstalledApps(
-          !includeSystemApps,
-          false,
-        );
+        final rows = await SystemMorphBridge.queryLauncherApps();
+        if (rows.isNotEmpty) {
+          mapped = LauncherListing.fromRows(rows);
+        }
       } catch (e) {
-        lastError = 'App list: $e';
-        apps = List<MorphAppItem>.from(kDemoApps);
-        usingDeviceApps = false;
-        deviceAppCount = 0;
-        return;
+        lastError = 'Launcher query: $e';
       }
 
-      if (installed.isEmpty) {
-        apps = List<MorphAppItem>.from(kDemoApps);
-        usingDeviceApps = false;
-        deviceAppCount = 0;
-        return;
-      }
-
-      final mapped = <MorphAppItem>[];
-      for (final a in installed) {
-        final pkg = a.packageName;
-        if (pkg.isEmpty) continue;
-        if (pkg == 'com.zibashu.morphos') continue;
-        final name = a.name.trim().isEmpty ? pkg : a.name.trim();
-        if (name.isEmpty) continue;
-        final cat = inferAppCategory(name: name, packageName: pkg);
-        mapped.add(
-          MorphAppItem(
-            id: pkg,
-            label: name,
-            icon: _iconForCategory(cat),
-            packageName: pkg,
-            color: _colorForCategory(cat),
-            isSystemDemo: false,
-            category: cat,
+      if (mapped.isEmpty) {
+        List<AppInfo> installed;
+        try {
+          // Include system apps with launcher icons. Labels as PM returns them
+          // (any language). Full icon decode of all packages can OOM.
+          installed = await InstalledApps.getInstalledApps(
+            !includeSystemApps,
+            false,
+          );
+        } catch (e) {
+          lastError = 'App list: $e';
+          apps = List<MorphAppItem>.from(kDemoApps);
+          usingDeviceApps = false;
+          deviceAppCount = 0;
+          return;
+        }
+        mapped = LauncherListing.fromRows(
+          installed.map(
+            (a) => {
+              'packageName': a.packageName,
+              'label': a.name,
+            },
           ),
         );
       }
-      mapped.sort(
-        (x, y) => x.label.toLowerCase().compareTo(y.label.toLowerCase()),
-      );
 
       if (mapped.isEmpty) {
         apps = List<MorphAppItem>.from(kDemoApps);
         usingDeviceApps = false;
         deviceAppCount = 0;
       } else {
-        apps = [
-          ...mapped,
-          const MorphAppItem(
-            id: 'settings',
-            label: 'MorphOS Settings',
-            icon: Icons.settings_outlined,
-            color: Color(0xFF90A4AE),
-            category: 'other',
-          ),
-        ];
+        apps = mapped;
         usingDeviceApps = true;
-        deviceAppCount = mapped.length;
+        deviceAppCount =
+            mapped.where((a) => a.id != LauncherListing.morphosPackage).length;
       }
     } catch (e) {
       lastError = '$e';
@@ -112,7 +96,6 @@ class AppCatalog {
       await loadIconsForPackages(
         apps
             .where((a) => !a.isSystemDemo && a.packageName != null)
-            .take(32)
             .map((a) => a.packageName!)
             .toList(),
       );
@@ -125,23 +108,43 @@ class AppCatalog {
     loadingIcons = true;
     var loaded = 0;
     try {
-      for (final pkg in packages) {
-        if (pkg.isEmpty || pkg == 'com.zibashu.morphos') continue;
-        try {
-          final info = await InstalledApps.getAppInfo(pkg, null);
-          final icon = info?.icon;
-          if (icon == null || icon.isEmpty) continue;
-          final bytes = icon.toList();
-          // Cap icon payload (~96KB) to avoid memory spikes.
-          if (bytes.length > 96 * 1024) continue;
-          final i = apps.indexWhere(
+      final want = packages
+          .where((p) => p.contains('.') && p != 'com.zibashu.morphos')
+          .toList();
+      for (var i = 0; i < want.length; i += 24) {
+        final end = (i + 24) > want.length ? want.length : i + 24;
+        final batch = want.sublist(i, end);
+        final native = await SystemMorphBridge.getLauncherIcons(batch);
+        native.forEach((pkg, bytes) {
+          if (bytes.isEmpty) return;
+          final idx = apps.indexWhere(
             (a) => a.id == pkg || a.packageName == pkg,
           );
-          if (i < 0) continue;
-          apps[i] = apps[i].copyWith(iconBytes: bytes);
+          if (idx < 0) return;
+          apps[idx] = apps[idx].copyWith(iconBytes: bytes);
           loaded++;
-        } catch (_) {
-          // Skip single-package failures.
+        });
+        for (final pkg in batch) {
+          final already = apps.any(
+            (a) =>
+                (a.id == pkg || a.packageName == pkg) &&
+                a.iconBytes != null &&
+                a.iconBytes!.isNotEmpty,
+          );
+          if (already) continue;
+          try {
+            final info = await InstalledApps.getAppInfo(pkg, null);
+            final icon = info?.icon;
+            if (icon == null || icon.isEmpty) continue;
+            final bytes = icon.toList();
+            if (bytes.length > 180 * 1024) continue;
+            final idx = apps.indexWhere(
+              (a) => a.id == pkg || a.packageName == pkg,
+            );
+            if (idx < 0) continue;
+            apps[idx] = apps[idx].copyWith(iconBytes: bytes);
+            loaded++;
+          } catch (_) {}
         }
       }
     } finally {
@@ -154,13 +157,20 @@ class AppCatalog {
   Future<List<int>?> loadDeviceIcon(String packageName) async {
     if (kIsWeb || packageName.isEmpty) return null;
     try {
+      final native = await SystemMorphBridge.getLauncherIcon(packageName);
+      if (native != null && native.isNotEmpty) {
+        final i = apps.indexWhere(
+          (a) => a.id == packageName || a.packageName == packageName,
+        );
+        if (i >= 0) {
+          apps[i] = apps[i].copyWith(iconBytes: native);
+        }
+        return native;
+      }
       final info = await InstalledApps.getAppInfo(packageName, null);
       final icon = info?.icon;
       if (icon == null || icon.isEmpty) return null;
       final bytes = icon.toList();
-      if (bytes.length > 128 * 1024) {
-        // Still use — single icon is fine.
-      }
       final i = apps.indexWhere(
         (a) => a.id == packageName || a.packageName == packageName,
       );
@@ -214,28 +224,6 @@ class AppCatalog {
       return false;
     }
   }
-
-  static IconData _iconForCategory(String cat) => switch (cat) {
-        'game' => Icons.sports_esports_outlined,
-        'nav' => Icons.map_outlined,
-        'read' => Icons.menu_book_outlined,
-        'work' => Icons.work_outline,
-        'media' => Icons.movie_outlined,
-        'study' => Icons.school_outlined,
-        'travel' => Icons.flight_takeoff,
-        _ => Icons.apps,
-      };
-
-  static Color _colorForCategory(String cat) => switch (cat) {
-        'game' => const Color(0xFFEC407A),
-        'nav' => const Color(0xFF26A69A),
-        'read' => const Color(0xFFA1887F),
-        'work' => const Color(0xFF5C6BC0),
-        'media' => const Color(0xFFAB47BC),
-        'study' => const Color(0xFF43A047),
-        'travel' => const Color(0xFF1E88E5),
-        _ => const Color(0xFF7C4DFF),
-      };
 
   static ImageProvider? imageProvider(MorphAppItem app) {
     final b = app.iconBytes;

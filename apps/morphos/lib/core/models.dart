@@ -171,6 +171,7 @@ enum IconStyleId {
 
 /// Wallpaper engine style (static gradients for V1; video later).
 enum WallpaperId {
+  verdantEmerald,
   dawn,
   nightCity,
   cyberpunk,
@@ -368,6 +369,7 @@ extension MorphProfileX on MorphProfileId {
 
 extension WallpaperX on WallpaperId {
   String get label => switch (this) {
+        WallpaperId.verdantEmerald => 'Verdant Emerald',
         WallpaperId.dawn => 'Dawn Sky',
         WallpaperId.nightCity => 'Night City',
         WallpaperId.cyberpunk => 'Cyberpunk',
@@ -375,6 +377,13 @@ extension WallpaperX on WallpaperId {
         WallpaperId.forest => 'Forest',
         WallpaperId.aurora => 'Aurora',
         WallpaperId.voidBlack => 'Void',
+      };
+
+  /// Bundled photo wallpaper, if this style is not a gradient.
+  String? get assetPath => switch (this) {
+        WallpaperId.verdantEmerald =>
+          'assets/wallpapers/verdant_emerald.jpg',
+        _ => null,
       };
 }
 
@@ -484,7 +493,7 @@ class MorphEnvironment {
       wallpaperId: byName(
         WallpaperId.values,
         m['wallpaperId'] as String?,
-        WallpaperId.cyberpunk,
+        WallpaperId.verdantEmerald,
       ),
       layoutPortrait: byName(
         MorphLayoutId.values,
@@ -529,7 +538,7 @@ class MorphEnvironment {
         return const MorphEnvironment(
           profileId: MorphProfileId.phone,
           themeId: MorphThemeId.neon,
-          wallpaperId: WallpaperId.nightCity,
+          wallpaperId: WallpaperId.verdantEmerald,
           layoutPortrait: MorphLayoutId.grid,
           layoutLandscape: MorphLayoutId.grid,
           iconStyle: IconStyleId.squircle,

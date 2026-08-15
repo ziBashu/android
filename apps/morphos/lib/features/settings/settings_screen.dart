@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:zibashu_ui/zibashu_ui.dart';
 
+import '../../core/home_occupancy.dart';
 import '../../core/image_customize.dart';
 import '../../core/models.dart';
 import '../../core/morph_controller.dart';
+import '../../core/productivity.dart';
 import '../../core/system_morph_bridge.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/morph_background.dart';
@@ -256,6 +258,72 @@ class SettingsScreen extends StatelessWidget {
                   await c.refreshSystemStatus();
                 },
                 child: const Text('Open system Home settings'),
+              ),
+            ]),
+            _section(c, 'Home widgets', [
+              Text(
+                'Widgets stay off the home screen until you add them here '
+                'or from Edit on the home wallpaper.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              for (final kind in HomeWidgetKind.values)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(kind.label, style: TextStyle(color: p.ink)),
+                  subtitle: Text(
+                    kind.blurb,
+                    style: TextStyle(color: p.muted, fontSize: 12),
+                  ),
+                  value: c.homeWidgets.contains(kind),
+                  onChanged: (_) => c.toggleHomeWidget(kind),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Glass dock', style: TextStyle(color: p.ink)),
+                subtitle: Text(
+                  'Off: dock apps return to the home page',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                value: c.dockVisible,
+                onChanged: c.setDockVisible,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.cleaning_services_outlined, color: p.accent),
+                title: Text(
+                  'Clear all apps on the home page',
+                  style: TextStyle(color: p.ink),
+                ),
+                subtitle: Text(
+                  'Does not uninstall anything',
+                  style: TextStyle(color: p.muted, fontSize: 12),
+                ),
+                onTap: () => c.deleteAllHomeApps(),
+              ),
+            ]),
+            _section(c, 'Rotation', [
+              Text(
+                'Auto follows the system. Lock stops slide-to-rotate on the clock.',
+                style: TextStyle(color: p.muted, fontSize: 12, height: 1.35),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: RotationAction.values.map((a) {
+                  return ChoiceChip(
+                    label: Text(a.label),
+                    selected: c.rotationAction == a,
+                    onSelected: (_) => c.setRotationControl(
+                      RotationControl(action: a, locked: c.rotationLocked),
+                    ),
+                  );
+                }).toList(),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Lock rotation', style: TextStyle(color: p.ink)),
+                value: c.rotationLocked,
+                onChanged: c.setRotationLocked,
               ),
             ]),
             _section(c, 'Home layout (portrait default)', [

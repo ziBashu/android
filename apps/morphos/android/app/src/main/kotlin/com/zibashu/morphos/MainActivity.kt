@@ -42,6 +42,11 @@ class MainActivity : FlutterActivity() {
 
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            MorphBatteryStream.CHANNEL,
+        ).setStreamHandler(MorphBatteryStream(applicationContext))
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             EVENT_CHANNEL,
         ).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
