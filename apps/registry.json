@@ -143,6 +143,22 @@
       "distribution": [
         "warehub"
       ]
+    },
+    {
+      "key": "unfold",
+      "slug": "unfold",
+      "name": "Unfold",
+      "dir": "apps/unfold",
+      "packageId": "com.zibashu.unfold",
+      "kind": "tool",
+      "surface": "tool",
+      "route": "/hub/warehub/unfold",
+      "blurb": "Local-first file viewer. Open, read, and edit without leaving the device.",
+      "available": true,
+      "accentHex": "0xFF3D6B54",
+      "distribution": [
+        "warehub"
+      ]
     }
   ]
 }

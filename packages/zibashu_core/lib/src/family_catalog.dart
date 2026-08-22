@@ -135,4 +135,14 @@ const List<FamilyApp> kFamilyCatalog = [
     available: true,
     accentHex: 0xFF6B5E4E,
   ),
+  FamilyApp(
+    slug: 'unfold',
+    name: 'Unfold',
+    packageId: 'com.zibashu.unfold',
+    surface: 'tool',
+    blurb: 'Local-first file viewer. Open, read, and edit without leaving the device.',
+    webRoute: '/hub/warehub/unfold',
+    available: true,
+    accentHex: 0xFF3D6B54,
+  ),
 ];

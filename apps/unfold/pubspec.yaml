@@ -1,0 +1,33 @@
+name: unfold
+description: Unfold — local-first file viewer and editor from ziBashu.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  zibashu_core:
+    path: ../../packages/zibashu_core
+  zibashu_ui:
+    path: ../../packages/zibashu_ui
+  archive: ">=3.6.1 <4.0.0"
+  html: ^0.15.4
+  image: ^4.3.0
+  markdown: ^7.2.2
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  xml: ^6.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/app_icon.png
