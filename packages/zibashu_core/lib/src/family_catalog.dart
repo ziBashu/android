@@ -40,7 +40,7 @@ const List<FamilyApp> kFamilyCatalog = [
     name: 'Seru',
     packageId: 'com.zibashu.seru',
     surface: 'messaging',
-    blurb: 'Private messaging for the ziBashu system.',
+    blurb: 'Chat, friends, threads, and ZIBA pay — from ziBashu.',
     webRoute: '/seru',
     accentHex: 0xFF3D5A80,
   ),

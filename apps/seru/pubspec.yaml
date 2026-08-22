@@ -1,7 +1,7 @@
 name: seru
 description: Seru - private messaging for the ziBashu system.
 publish_to: none
-version: 0.1.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.5.0
@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  url_launcher: ^6.3.1
   zibashu_core:
     path: ../../packages/zibashu_core
   zibashu_ui:

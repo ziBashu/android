@@ -39,7 +39,7 @@
       "kind": "messaging",
       "surface": "messaging",
       "route": "/seru",
-      "blurb": "Private messaging for the ziBashu system.",
+      "blurb": "Chat, friends, threads, and ZIBA pay — from ziBashu.",
       "available": true,
       "accentHex": "0xFF3D5A80",
       "distribution": [
