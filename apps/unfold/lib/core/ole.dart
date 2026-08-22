@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 /// OLE Compound File (MS-CFB) reader/writer used for legacy Word .doc files.
@@ -257,6 +257,11 @@ int _u16(Uint8List b, int o) => b[o] | (b[o + 1] << 8);
 int _u32(Uint8List b, int o) =>
     b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24);
 
+void _put16(Uint8List b, int o, int v) {
+  b[o] = v & 0xFF;
+  b[o + 1] = (v >> 8) & 0xFF;
+}
+
 void _put32(Uint8List b, int o, int v) {
   b[o] = v & 0xFF;
   b[o + 1] = (v >> 8) & 0xFF;
@@ -280,32 +285,132 @@ Uint8List _u32list(List<int> v) {
   return out;
 }
 
+/// Word 97–2003 (.doc) text via MS-DOC FIB + piece table (CLX / PlcPcd).
 class DocCodec {
+  static const _textAt = 2048;
+
   static Uint8List encode(String text) {
-    final payload = Uint8List.fromList(utf8.encode(text));
-    final fib = Uint8List(512);
-    fib[0] = 0xEC;
-    fib[1] = 0xA5;
-    fib[2] = 0xC1;
-    fib[3] = 0x00;
-    final wd = Uint8List(512 + payload.length);
-    wd.setRange(0, 512, fib);
-    wd.setRange(512, wd.length, payload);
+    final units = '$text\r'.codeUnits;
+    final wd = Uint8List(_textAt + units.length * 2);
+    wd[0] = 0xEC;
+    wd[1] = 0xA5;
+    wd[2] = 0xC1;
+    wd[3] = 0x00;
+    _put16(wd, 0x20, 0x000E);
+    _put16(wd, 0x3E, 0x0016);
+    _put16(wd, 0x0A, 0x0200);
+    _put32(wd, 0x4C, units.length);
+    _put16(wd, 0x98, 0x005D);
+    final clx = _clx(units.length, _textAt);
+    _put32(wd, 0x1A2, 0);
+    _put32(wd, 0x1A6, clx.length);
+    for (var i = 0; i < units.length; i++) {
+      wd[_textAt + i * 2] = units[i] & 0xFF;
+      wd[_textAt + i * 2 + 1] = (units[i] >> 8) & 0xFF;
+    }
     return OleFile.pack({
       'WordDocument': wd,
-      '1Table': Uint8List.fromList(utf8.encode('UNFOLD-DOC')),
+      '1Table': clx,
     });
+  }
+
+  static Uint8List _clx(int charCount, int fc) {
+    final plcLen = 16;
+    final out = Uint8List(5 + plcLen);
+    out[0] = 0x02;
+    _put32(out, 1, plcLen);
+    _put32(out, 5, 0);
+    _put32(out, 9, charCount);
+    _put32(out, 15, fc);
+    return out;
   }
 
   static String decode(Uint8List bytes) {
     final ole = OleFile.parse(bytes);
     final wd = ole.stream('WordDocument');
-    if (wd == null || wd.length < 2) {
-      throw FormatException('WordDocument stream missing');
+    if (wd == null || wd.length < 0x1AA) {
+      throw FormatException('WordDocument stream missing or truncated');
     }
-    if (wd[0] == 0xEC && wd[1] == 0xA5 && wd.length > 512) {
-      return utf8.decode(wd.sublist(512), allowMalformed: true);
+    if (_u16(wd, 0) != 0xA5EC) {
+      throw FormatException('Not a Word binary document');
     }
-    return utf8.decode(wd, allowMalformed: true);
+    final flags = _u16(wd, 0x0A);
+    if (flags & 0x0100 != 0) {
+      throw FormatException('Encrypted Word document');
+    }
+    final tableName = (flags & 0x0200) != 0 ? '1Table' : '0Table';
+    final table = ole.stream(tableName);
+    if (table == null) {
+      throw FormatException('Word table stream missing');
+    }
+    final fcClx = _u32(wd, 0x1A2);
+    final lcbClx = _u32(wd, 0x1A6);
+    if (lcbClx == 0 || fcClx < 0 || fcClx + lcbClx > table.length) {
+      throw FormatException('Word piece table missing');
+    }
+    final clx = table.sublist(fcClx, fcClx + lcbClx);
+    return _textFromClx(wd, clx);
+  }
+
+  static String _textFromClx(Uint8List wordDoc, Uint8List clx) {
+    var i = 0;
+    while (i < clx.length) {
+      final marker = clx[i];
+      if (marker == 0x01) {
+        if (i + 3 > clx.length) break;
+        final cb = clx[i + 1] | (clx[i + 2] << 8);
+        i += 3 + cb;
+        continue;
+      }
+      if (marker == 0x02) {
+        if (i + 5 > clx.length) break;
+        final lcb = _u32(clx, i + 1);
+        i += 5;
+        if (lcb <= 0 || i + lcb > clx.length) break;
+        return _textFromPlcPcd(wordDoc, clx.sublist(i, i + lcb));
+      }
+      i++;
+    }
+    throw FormatException('Word piece table (Pcdt) not found');
+  }
+
+  static String _textFromPlcPcd(Uint8List wordDoc, Uint8List plc) {
+    if (plc.length < 16) {
+      throw FormatException('PlcPcd too small');
+    }
+    final n = (plc.length - 4) ~/ 12;
+    if (n < 1) throw FormatException('Word document has no text pieces');
+    final cps = List<int>.generate(n + 1, (k) => _u32(plc, k * 4));
+    final pcd0 = (n + 1) * 4;
+    final buf = StringBuffer();
+    for (var k = 0; k < n; k++) {
+      final chars = cps[k + 1] - cps[k];
+      if (chars <= 0) continue;
+      final fcRaw = _u32(plc, pcd0 + k * 8 + 2);
+      final compressed = (fcRaw & 0x40000000) != 0;
+      var fc = fcRaw & 0x3FFFFFFF;
+      if (compressed) {
+        fc = fc ~/ 2;
+        final end = min(fc + chars, wordDoc.length);
+        for (var b = fc; b < end; b++) {
+          buf.write(_docChar(wordDoc[b]));
+        }
+      } else {
+        final end = min(fc + chars * 2, wordDoc.length);
+        for (var b = fc; b + 1 < end; b += 2) {
+          buf.write(_docChar(wordDoc[b] | (wordDoc[b + 1] << 8)));
+        }
+      }
+    }
+    return buf.toString();
+  }
+
+  static String _docChar(int cu) {
+    if (cu == 0x0D || cu == 0x0B || cu == 0x0C || cu == 0x0E) return '\n';
+    if (cu == 0x07) return '\t';
+    if (cu == 0x00 || cu == 0x01 || cu == 0x05 || cu == 0x08) return '';
+    if (cu == 0x13 || cu == 0x14 || cu == 0x15) return '';
+    if (cu < 0x20 && cu != 0x09) return '';
+    return String.fromCharCode(cu);
   }
 }

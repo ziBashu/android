@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:unfold/core/detect.dart';
-import 'package:unfold/core/ole.dart';
 import 'package:unfold/core/unfold_doc.dart';
 
 import 'fixtures.dart';
@@ -109,7 +108,7 @@ void main() {
 
   test('legacy DOC yields the known body text', () {
     final path = p.join(tmp.path, 'letter.doc');
-    File(path).writeAsBytesSync(DocCodec.encode('Known DOC body'));
+    File(path).writeAsBytesSync(buildTestDoc('Known DOC body'));
     expect(detectKind(path, File(path).readAsBytesSync()), FileKind.doc);
     final doc = UnfoldDocument.open(path);
     expect(doc.kind, FileKind.doc);
@@ -156,5 +155,20 @@ void main() {
     final one = p.join(tmp.path, 'one');
     doc.extractZipTo(one, only: 'hello.txt');
     expect(File(p.join(one, 'hello.txt')).readAsStringSync(), contains('zip-payload-unfold'));
+  });
+
+  test('ZIP extract does not write a .. entry outside dest', () {
+    final dest = p.join(tmp.path, 'unfold-out');
+    Directory(dest).createSync(recursive: true);
+    final zipPath = p.join(tmp.path, 'slip.zip');
+    File(zipPath).writeAsBytesSync(buildTestZipEntries({
+      'hello.txt': 'safe-payload',
+      '../unfold-out-evil/pwn.txt': 'should-not-land',
+    }));
+    final doc = UnfoldDocument.open(zipPath);
+    doc.extractZipTo(dest);
+    expect(File(p.join(dest, 'hello.txt')).readAsStringSync(), 'safe-payload');
+    expect(File(p.join(tmp.path, 'unfold-out-evil', 'pwn.txt')).existsSync(), isFalse);
+    expect(File(p.join(dest, 'pwn.txt')).existsSync(), isFalse);
   });
 }

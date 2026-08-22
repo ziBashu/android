@@ -146,11 +146,11 @@ class UnfoldDocument {
     for (final f in z.files) {
       if (!f.isFile) continue;
       if (only != null && f.name != only) continue;
-      final dest = File(p.join(root.path, f.name));
-      final normalized = p.normalize(dest.absolute.path);
-      if (!normalized.startsWith(rootPath)) {
-        throw FormatException('Refusing to extract outside destination: ${f.name}');
+      final destPath = safeZipEntryPath(rootPath, f.name);
+      if (destPath == null) {
+        continue;
       }
+      final dest = File(destPath);
       dest.parent.createSync(recursive: true);
       final content = f.content;
       final data = content is Uint8List
@@ -158,6 +158,24 @@ class UnfoldDocument {
           : Uint8List.fromList(content as List<int>);
       dest.writeAsBytesSync(data);
     }
+  }
+
+  /// Returns a path under [rootPath] for [entryName], or null if the name
+  /// would escape the destination (zip-slip).
+  static String? safeZipEntryPath(String rootPath, String entryName) {
+    final cleaned = entryName.replaceAll('\\', '/');
+    if (cleaned.isEmpty ||
+        cleaned.startsWith('/') ||
+        cleaned.contains(':') ||
+        p.isAbsolute(cleaned)) {
+      return null;
+    }
+    final dest = p.normalize(p.join(rootPath, cleaned));
+    final root = p.normalize(rootPath);
+    if (dest == root) return dest;
+    final prefix = root.endsWith(p.separator) ? root : '$root${p.separator}';
+    if (!dest.startsWith(prefix)) return null;
+    return dest;
   }
 
   void save() {

@@ -140,8 +140,134 @@ Uint8List buildTestPng() {
 }
 
 Uint8List buildTestZip(String name, String payload) {
+  return buildTestZipEntries({name: payload});
+}
+
+Uint8List buildTestZipEntries(Map<String, String> files) {
   final archive = Archive();
-  final data = utf8.encode(payload);
-  archive.addFile(ArchiveFile(name, data.length, data));
+  files.forEach((name, payload) {
+    final data = utf8.encode(payload);
+    archive.addFile(ArchiveFile(name, data.length, data));
+  });
   return Uint8List.fromList(ZipEncoder().encode(archive)!);
+}
+
+void _w16(Uint8List b, int o, int v) {
+  b[o] = v & 0xFF;
+  b[o + 1] = (v >> 8) & 0xFF;
+}
+
+void _w32(Uint8List b, int o, int v) {
+  b[o] = v & 0xFF;
+  b[o + 1] = (v >> 8) & 0xFF;
+  b[o + 2] = (v >> 16) & 0xFF;
+  b[o + 3] = (v >> 24) & 0xFF;
+}
+
+/// Independent Word 97 (.doc) writer: MS-CFB + FIB + Unicode piece table.
+/// Does not call Unfold's DocCodec or OleFile.
+Uint8List buildTestDoc(String body) {
+  const sector = 512;
+  const eoc = 0xFFFFFFFE;
+  const fatSect = 0xFFFFFFFD;
+  const free = 0xFFFFFFFF;
+  const textAt = 2048;
+  final units = '$body\r'.codeUnits;
+  final wdLen = textAt + units.length * 2;
+  final wdSectors = (wdLen + sector - 1) ~/ sector;
+  final wdPad = wdSectors * sector;
+
+  // CLX: Pcdt + PlcPcd with one Unicode piece.
+  final clx = Uint8List(21);
+  clx[0] = 0x02;
+  _w32(clx, 1, 16);
+  _w32(clx, 5, 0);
+  _w32(clx, 9, units.length);
+  _w32(clx, 15, textAt);
+
+  final wd = Uint8List(wdPad);
+  wd[0] = 0xEC;
+  wd[1] = 0xA5;
+  wd[2] = 0xC1;
+  wd[3] = 0x00;
+  _w16(wd, 0x0A, 0x0200);
+  _w16(wd, 0x20, 0x000E);
+  _w16(wd, 0x3E, 0x0016);
+  _w32(wd, 0x4C, units.length);
+  _w16(wd, 0x98, 0x005D);
+  _w32(wd, 0x1A2, 0);
+  _w32(wd, 0x1A6, clx.length);
+  for (var i = 0; i < units.length; i++) {
+    wd[textAt + i * 2] = units[i] & 0xFF;
+    wd[textAt + i * 2 + 1] = (units[i] >> 8) & 0xFF;
+  }
+
+  final tablePad = Uint8List(sector);
+  tablePad.setRange(0, clx.length, clx);
+
+  // Sectors: 0 FAT, 1 directory, 2.. word, then table.
+  final wdStart = 2;
+  final tableStart = wdStart + wdSectors;
+  final fat = List<int>.filled(sector ~/ 4, free);
+  fat[0] = fatSect;
+  fat[1] = eoc;
+  for (var i = 0; i < wdSectors; i++) {
+    fat[wdStart + i] = i == wdSectors - 1 ? eoc : wdStart + i + 1;
+  }
+  fat[tableStart] = eoc;
+
+  final dir = Uint8List(sector);
+  void dirEnt(int index, String name, int type, int start, int size,
+      {int child = -1, int right = -1}) {
+    final off = index * 128;
+    for (var i = 0; i < name.length && i < 31; i++) {
+      dir[off + i * 2] = name.codeUnitAt(i) & 0xFF;
+      dir[off + i * 2 + 1] = (name.codeUnitAt(i) >> 8) & 0xFF;
+    }
+    _w16(dir, off + 0x40, (name.length + 1) * 2);
+    dir[off + 0x42] = type;
+    _w32(dir, off + 0x44, 0xFFFFFFFF);
+    _w32(dir, off + 0x48, right);
+    _w32(dir, off + 0x4C, child);
+    _w32(dir, off + 0x74, start);
+    _w32(dir, off + 0x78, size);
+  }
+
+  dirEnt(0, 'Root Entry', 5, 0, 0, child: 1);
+  dirEnt(1, 'WordDocument', 2, wdStart, wdLen, right: 2);
+  dirEnt(2, '1Table', 2, tableStart, clx.length);
+
+  final header = Uint8List(512);
+  final sig = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+  for (var i = 0; i < 8; i++) {
+    header[i] = sig[i];
+  }
+  header[0x18] = 0x3E;
+  header[0x1A] = 0x03;
+  header[0x1C] = 0xFE;
+  header[0x1D] = 0xFF;
+  header[0x1E] = 9;
+  header[0x20] = 6;
+  _w32(header, 0x2C, 1);
+  _w32(header, 0x30, 1);
+  _w32(header, 0x38, 4096);
+  _w32(header, 0x3C, eoc);
+  _w32(header, 0x44, eoc);
+  _w32(header, 0x4C, 0);
+  for (var i = 1; i < 109; i++) {
+    _w32(header, 0x4C + i * 4, free);
+  }
+
+  final fatBytes = Uint8List(sector);
+  for (var i = 0; i < fat.length; i++) {
+    _w32(fatBytes, i * 4, fat[i]);
+  }
+
+  final out = BytesBuilder();
+  out.add(header);
+  out.add(fatBytes);
+  out.add(dir);
+  out.add(wd);
+  out.add(tablePad);
+  return Uint8List.fromList(out.takeBytes());
 }
