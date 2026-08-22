@@ -33,7 +33,7 @@ class KeyboardHostView(context: Context) : LinearLayout(context),
     private val suggestionBar: LinearLayout
     private val pad: KeyboardPadView
     private val popup = AlternatePopup(context)
-    private var longPressConsumed = false
+    private val longPress = LongPressSession()
     private val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     init {
@@ -165,37 +165,35 @@ class KeyboardHostView(context: Context) : LinearLayout(context),
 
     override fun currentLayout(): KeyboardLayout? = controller?.currentLayout()
 
-    override fun onKeyUp(rect: KeyRect) {
-        if (longPressConsumed) {
-            val stillOpen = popup.isShowing
-            popup.dismiss()
-            longPressConsumed = false
-            if (stillOpen) {
-                controller?.onKey(rect.key)
+    override fun onFingerMove(windowX: Int, windowY: Int) {
+        if (!longPress.isOpen) return
+        longPress.move(windowX, windowY)
+        popup.highlight(longPress.highlighted)
+    }
+
+    override fun onKeyUp(rect: KeyRect, windowX: Int, windowY: Int) {
+        longPress.move(windowX, windowY)
+        when (val result = longPress.up()) {
+            is LongPressSession.UpResult.Alternate -> {
+                popup.dismiss()
+                controller?.pickAlternate(result.token)
             }
-            return
-        }
-        controller?.onKey(rect.key)
-        if (rect.key.type != KeyType.SHIFT) {
-            pad.bindLayout(controller?.currentLayout() ?: return)
+            LongPressSession.UpResult.Nothing -> {
+                popup.dismiss()
+            }
+            LongPressSession.UpResult.CommitBase -> {
+                popup.dismiss()
+                controller?.onKey(rect.key)
+                if (rect.key.type != KeyType.SHIFT) {
+                    pad.bindLayout(controller?.currentLayout() ?: return)
+                }
+            }
         }
     }
 
     override fun onLongPress(rect: KeyRect) {
-        longPressConsumed = true
-        popup.show(
-            anchor = pad,
-            key = rect,
-            colors = colors,
-            onPick = { token ->
-                longPressConsumed = true
-                controller?.pickAlternate(token)
-                pad.cancelPress()
-            },
-            onDismiss = {
-                pad.cancelPress()
-            },
-        )
+        popup.show(anchor = pad, key = rect, colors = colors)
+        longPress.start(popup.cells)
     }
 
     override fun onBackspaceRepeat() {
@@ -211,13 +209,13 @@ class KeyboardHostView(context: Context) : LinearLayout(context),
     }
 
     override fun onCancel() {
+        longPress.cancel()
         popup.dismiss()
-        longPressConsumed = false
     }
 
     fun dismissPopup() {
+        longPress.cancel()
         popup.dismiss()
-        longPressConsumed = false
         pad.cancelPress()
     }
 

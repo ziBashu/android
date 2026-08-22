@@ -61,8 +61,9 @@ class KeyboardPadView(context: Context) : View(context) {
     }
 
     interface Listener {
-        fun onKeyUp(rect: KeyRect)
+        fun onKeyUp(rect: KeyRect, windowX: Int, windowY: Int)
         fun onLongPress(rect: KeyRect)
+        fun onFingerMove(windowX: Int, windowY: Int)
         fun onBackspaceRepeat()
         fun onPressFeedback()
         fun onCancel()
@@ -176,6 +177,9 @@ class KeyboardPadView(context: Context) : View(context) {
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> {
+                val wx = windowX(event.x)
+                val wy = windowY(event.y)
+                listener?.onFingerMove(wx, wy)
                 val hit = hit(event.x.toInt(), event.y.toInt())
                 if (hit?.key?.id != pressedId) {
                     handler.removeCallbacks(longPress)
@@ -188,7 +192,9 @@ class KeyboardPadView(context: Context) : View(context) {
                 pressedId = null
                 invalidate()
                 val hit = id?.let { want -> rects.find { it.key.id == want } }
-                if (hit != null) listener?.onKeyUp(hit)
+                if (hit != null) {
+                    listener?.onKeyUp(hit, windowX(event.x), windowY(event.y))
+                }
             }
             MotionEvent.ACTION_CANCEL -> {
                 cancelPress()
@@ -202,6 +208,18 @@ class KeyboardPadView(context: Context) : View(context) {
         handler.removeCallbacks(backspaceRepeat)
         listener?.onBackspaceRepeat()
         handler.postDelayed(backspaceRepeat, KeylineMetrics.BACKSPACE_REPEAT_MS)
+    }
+
+    private fun windowX(localX: Float): Int {
+        val loc = IntArray(2)
+        getLocationInWindow(loc)
+        return loc[0] + localX.toInt()
+    }
+
+    private fun windowY(localY: Float): Int {
+        val loc = IntArray(2)
+        getLocationInWindow(loc)
+        return loc[1] + localY.toInt()
     }
 
     fun hit(x: Int, y: Int): KeyRect? = rects.find { it.contains(x, y) }

@@ -56,6 +56,9 @@ contentDescription.
 
 Long-press characters are **data on the key**, not a per-key UI fork.
 The popup reads `key.alternates` and places itself with `PopupPlacement`.
+Finger tracking lives in `LongPressSession`: after the popup is shown, release
+commits only the highlighted alternate (or nothing) — never the base letter as well.
+The popup is not focusable, so the IME keeps the touch stream.
 
 ## Language architecture
 

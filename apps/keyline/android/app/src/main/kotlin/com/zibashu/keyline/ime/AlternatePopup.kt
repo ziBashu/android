@@ -14,22 +14,25 @@ import com.zibashu.keyline.theme.KeylineColors
 
 class AlternatePopup(private val context: Context) {
     private var window: PopupWindow? = null
+    private var row: LinearLayout? = null
+    private var colors: KeylineColors? = null
+    var cells: List<PopupCell> = emptyList()
+        private set
 
     fun show(
         anchor: View,
         key: KeyRect,
         colors: KeylineColors,
-        onPick: (String) -> Unit,
-        onDismiss: () -> Unit,
     ) {
         dismiss()
+        this.colors = colors
         val alts = key.key.alternates
         if (alts.isEmpty()) return
 
         val density = context.resources.displayMetrics.density
         val pad = (8 * density).toInt()
         val cell = (40 * density).toInt()
-        val row = LinearLayout(context).apply {
+        val built = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(pad, pad, pad, pad)
             val bg = GradientDrawable().apply {
@@ -50,12 +53,10 @@ class AlternatePopup(private val context: Context) {
                 minHeight = cell
                 setPadding(pad, pad, pad, pad)
                 contentDescription = alt
-                setOnClickListener {
-                    onPick(alt)
-                    dismiss()
-                }
+                isClickable = false
+                isFocusable = false
             }
-            row.addView(tv)
+            built.addView(tv)
         }
         val popupW = pad * 2 + alts.size * cell
         val popupH = pad * 2 + cell
@@ -77,19 +78,37 @@ class AlternatePopup(private val context: Context) {
             boundsHeight = dm.heightPixels,
             gap = (8 * density).toInt(),
         )
-        val popup = PopupWindow(row, popupW, popupH, true).apply {
-            isOutsideTouchable = true
+        cells = PopupCells.row(
+            tokens = alts,
+            originX = placed.x,
+            originY = placed.y,
+            pad = pad,
+            cell = cell,
+        )
+        val popup = PopupWindow(built, popupW, popupH, /* focusable = */ false).apply {
+            isOutsideTouchable = false
+            isTouchable = false
             elevation = 10 * density
-            setOnDismissListener { onDismiss() }
         }
         window = popup
-        val parent = anchor.rootView
-        popup.showAtLocation(parent, Gravity.NO_GRAVITY, placed.x, placed.y)
+        row = built
+        popup.showAtLocation(anchor.rootView, Gravity.NO_GRAVITY, placed.x, placed.y)
+    }
+
+    fun highlight(token: String?) {
+        val built = row ?: return
+        val on = colors?.keyFillPressed ?: 0
+        for (i in 0 until built.childCount) {
+            val child = built.getChildAt(i) as? TextView ?: continue
+            child.setBackgroundColor(if (child.text.toString() == token) on else 0)
+        }
     }
 
     fun dismiss() {
         window?.dismiss()
         window = null
+        row = null
+        cells = emptyList()
     }
 
     val isShowing: Boolean get() = window?.isShowing == true

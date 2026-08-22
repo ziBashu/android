@@ -157,6 +157,7 @@ class SettingsActivity : Activity() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         box.addView(body(title, colors.suggestionHighlight, 13f))
         val group = RadioGroup(this).apply { orientation = LinearLayout.VERTICAL }
+        val radioSpec = SettingsLayout.radioButton()
         options.forEachIndexed { index, (label, value) ->
             val btn = RadioButton(this).apply {
                 text = label
@@ -165,9 +166,16 @@ class SettingsActivity : Activity() {
                 id = index + 1
                 setOnClickListener { onPick(value) }
             }
-            group.addView(btn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            group.addView(
+                btn,
+                LinearLayout.LayoutParams(radioSpec.width, radioSpec.height, radioSpec.weight),
+            )
         }
-        box.addView(group)
+        val groupSpec = SettingsLayout.radioGroup()
+        box.addView(
+            group,
+            LinearLayout.LayoutParams(groupSpec.width, groupSpec.height, groupSpec.weight),
+        )
         return box
     }
 
@@ -191,7 +199,11 @@ class SettingsActivity : Activity() {
             isChecked = checked
             setOnCheckedChangeListener { _, isChecked -> onChange(isChecked) }
         }
-        row.addView(label, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val labelSpec = SettingsLayout.switchLabel()
+        row.addView(
+            label,
+            LinearLayout.LayoutParams(labelSpec.width, labelSpec.height, labelSpec.weight),
+        )
         row.addView(toggle)
         return row
     }
