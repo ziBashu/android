@@ -1,100 +1,148 @@
-﻿{
-    "family":  "ziBashu",
-    "website":  "https://zibashu4.com",
-    "packagePrefix":  "com.zibashu",
-    "kinds":  [
-                  "hub",
-                  "messaging",
-                  "tool",
-                  "game",
-                  "lab",
-                  "studio",
-                  "social",
-                  "other"
-              ],
-    "apps":  [
-                 {
-                     "key":  "hub",
-                     "slug":  "hub",
-                     "name":  "ziBashu Hub",
-                     "dir":  "apps/zibashu_hub",
-                     "packageId":  "com.zibashu.hub",
-                     "kind":  "hub",
-                     "surface":  "hub",
-                     "route":  "/",
-                     "blurb":  "Directory of ziBashu apps on your device and the web.",
-                     "available":  true,
-                     "accentHex":  "0xFF2F6F4E",
-                     "distribution":  [
-                                          "warehub",
-                                          "play"
-                                      ]
-                 },
-                 {
-                     "key":  "seru",
-                     "slug":  "seru",
-                     "name":  "Seru",
-                     "dir":  "apps/seru",
-                     "packageId":  "com.zibashu.seru",
-                     "kind":  "messaging",
-                     "surface":  "messaging",
-                     "route":  "/seru",
-                     "blurb":  "Private messaging for the ziBashu system.",
-                     "available":  true,
-                     "accentHex":  "0xFF3D5A80",
-                     "distribution":  [
-                                          "warehub",
-                                          "play"
-                                      ]
-                 },
-                 {
-                     "key":  "neon_chronos",
-                     "slug":  "neon_chronos",
-                     "name":  "Neon Chronos",
-                     "dir":  "apps/neon_chronos",
-                     "packageId":  "com.zibashu.neon_chronos",
-                     "kind":  "tool",
-                     "surface":  "tool",
-                     "route":  "/hub",
-                     "blurb":  "Futuristic neon cyberpunk clock — digital HUD time device.",
-                     "available":  true,
-                     "accentHex":  "0xFF00E5FF",
-                     "distribution":  [
-                                          "warehub"
-                                      ]
-                 },
-                 {
-                     "key":  "morphos",
-                     "slug":  "morphos",
-                     "name":  "MorphOS",
-                     "dir":  "apps/morphos",
-                     "packageId":  "com.zibashu.morphos",
-                     "kind":  "other",
-                     "surface":  "other",
-                     "route":  "/hub",
-                     "blurb":  "Transformable phone interface - adaptive launcher and morph profiles.",
-                     "available":  true,
-                     "accentHex":  "0xFF7C4DFF",
-                     "distribution":  [
-                                          "warehub"
-                                      ]
-                 },
-                 {
-                     "key":  "flux",
-                     "slug":  "flux",
-                     "name":  "Flux",
-                     "dir":  "apps/flux",
-                     "packageId":  "com.zibashu.flux",
-                     "kind":  "tool",
-                     "surface":  "tool",
-                     "route":  "/flux",
-                     "blurb":  "Flux VPN — ziBashu-linked private network client (foundation, locked).",
-                     "available":  true,
-                     "accentHex":  "0xFF2EE6D6",
-                     "distribution":  [
-                                          "warehub",
-                                          "play"
-                                      ]
-                 }
-             ]
+{
+  "family": "ziBashu",
+  "website": "https://zibashu4.com",
+  "packagePrefix": "com.zibashu",
+  "kinds": [
+    "hub",
+    "messaging",
+    "tool",
+    "game",
+    "lab",
+    "studio",
+    "social",
+    "other"
+  ],
+  "apps": [
+    {
+      "key": "hub",
+      "slug": "hub",
+      "name": "ziBashu Hub",
+      "dir": "apps/zibashu_hub",
+      "packageId": "com.zibashu.hub",
+      "kind": "hub",
+      "surface": "hub",
+      "route": "/",
+      "blurb": "Directory of ziBashu apps on your device and the web.",
+      "available": true,
+      "accentHex": "0xFF2F6F4E",
+      "distribution": [
+        "warehub",
+        "play"
+      ]
+    },
+    {
+      "key": "seru",
+      "slug": "seru",
+      "name": "Seru",
+      "dir": "apps/seru",
+      "packageId": "com.zibashu.seru",
+      "kind": "messaging",
+      "surface": "messaging",
+      "route": "/seru",
+      "blurb": "Private messaging for the ziBashu system.",
+      "available": true,
+      "accentHex": "0xFF3D5A80",
+      "distribution": [
+        "warehub",
+        "play"
+      ]
+    },
+    {
+      "key": "neon_chronos",
+      "slug": "neon_chronos",
+      "name": "Neon Chronos",
+      "dir": "apps/neon_chronos",
+      "packageId": "com.zibashu.neon_chronos",
+      "kind": "tool",
+      "surface": "tool",
+      "route": "/hub",
+      "blurb": "Futuristic neon cyberpunk clock — digital HUD time device.",
+      "available": true,
+      "accentHex": "0xFF00E5FF",
+      "distribution": [
+        "warehub"
+      ]
+    },
+    {
+      "key": "morphos",
+      "slug": "morphos",
+      "name": "MorphOS",
+      "dir": "apps/morphos",
+      "packageId": "com.zibashu.morphos",
+      "kind": "other",
+      "surface": "other",
+      "route": "/hub",
+      "blurb": "Transformable phone interface - adaptive launcher and morph profiles.",
+      "available": true,
+      "accentHex": "0xFF7C4DFF",
+      "distribution": [
+        "warehub"
+      ]
+    },
+    {
+      "key": "flux",
+      "slug": "flux",
+      "name": "Flux",
+      "dir": "apps/flux",
+      "packageId": "com.zibashu.flux",
+      "kind": "tool",
+      "surface": "tool",
+      "route": "/flux",
+      "blurb": "Flux VPN — ziBashu-linked private network client (foundation, locked).",
+      "available": true,
+      "accentHex": "0xFF2EE6D6",
+      "distribution": [
+        "warehub",
+        "play"
+      ]
+    },
+    {
+      "key": "meld",
+      "slug": "meld",
+      "name": "Meld",
+      "dir": "apps/meld",
+      "packageId": "com.zibashu.meld",
+      "kind": "studio",
+      "surface": "studio",
+      "route": "/hub/warehub/meld",
+      "blurb": "Local-first video and audio editor. Your files stay on the device.",
+      "available": true,
+      "accentHex": "0xFF1A9B8E",
+      "distribution": [
+        "warehub"
+      ]
+    },
+    {
+      "key": "continuum",
+      "slug": "continuum",
+      "name": "Continuum",
+      "dir": "apps/continuum",
+      "packageId": "com.zibashu.continuum",
+      "kind": "studio",
+      "surface": "studio",
+      "route": "/hub/warehub/continuum",
+      "blurb": "Professional drawing studio that follows the artist from Windows to Android.",
+      "available": true,
+      "accentHex": "0xFF3EC8FF",
+      "distribution": [
+        "warehub"
+      ]
+    },
+    {
+      "key": "keyline",
+      "slug": "keyline",
+      "name": "KEYLINE",
+      "dir": "apps/keyline",
+      "packageId": "com.zibashu.keyline",
+      "kind": "tool",
+      "surface": "tool",
+      "route": "/hub/warehub/keyline",
+      "blurb": "Offline-first English keyboard. Typing stays on the device.",
+      "available": true,
+      "accentHex": "0xFF6B5E4E",
+      "distribution": [
+        "warehub"
+      ]
+    }
+  ]
 }

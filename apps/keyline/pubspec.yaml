@@ -1,0 +1,22 @@
+name: keyline
+description: KEYLINE — offline-first English keyboard from ziBashu.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  zibashu_ui:
+    path: ../../packages/zibashu_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

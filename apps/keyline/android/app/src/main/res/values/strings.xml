@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KEYLINE</string>
+    <string name="ime_name">KEYLINE</string>
+    <string name="subtype_en_us">English</string>
+    <string name="privacy_line">KEYLINE never sends what you type to a server. Typing data stays on this device.</string>
+</resources>

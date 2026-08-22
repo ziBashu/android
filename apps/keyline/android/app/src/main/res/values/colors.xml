@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keep in sync with KeylinePalette.Light -->
+    <color name="keyline_keyboard_bg">#F3EFE6</color>
+    <color name="keyline_key_fill">#E7E1D4</color>
+    <color name="keyline_key_fill_pressed">#D9D1C2</color>
+    <color name="keyline_key_special">#DCD4C6</color>
+    <color name="keyline_key_label">#2C2A26</color>
+    <color name="keyline_key_border">#D0C8BA</color>
+    <color name="keyline_shift_armed">#C9BBA8</color>
+    <color name="keyline_caps_lock">#B7A48C</color>
+    <color name="keyline_popup_bg">#F7F3EA</color>
+    <color name="keyline_accent">#6B5E4E</color>
+</resources>
